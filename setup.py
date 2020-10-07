@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import pyasice
+
+from setuptools import setup
+
+version = pyasice.__version__
+
+readme = open('README.md').read()
+
+requirements = [
+    line for line in open('requirements.txt').readlines()
+    if line and not line.startswith('#')
+]
+
+setup(
+    name='esteid-certificates',
+    version=version,
+    description="""Manipulate ASiC-E containers and XAdES/eIDAS signatures for Estonian e-identity services""",
+    long_description=readme,
+    long_description_content_type='text/markdown',
+    author='Thorgate',
+    author_email='jyrno@thorgate.eu',
+    url='https://github.com/thorgate/pyasice',
+    packages=[
+        'pyasice',
+    ],
+    include_package_data=True,
+    install_requires=requirements,
+    license="ISC",
+    keywords='esteid asice xades smartid smart-id mobiilid mobile-id idcard',
+    classifiers=[
+        'Development Status :: 5 - Production',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: BSD License',
+        'Natural Language :: English',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+    ],
+)
