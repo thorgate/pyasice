@@ -1,5 +1,3 @@
-# coding: utf-8
-from __future__ import unicode_literals
 import hashlib
 
 from oscrypto import asymmetric
@@ -11,11 +9,11 @@ from asn1crypto.x509 import Certificate
 
 import requests
 
-from .exceptions import BDoc2Error
+from .exceptions import PyAsiceError
 
 
 class SKHackedTBSRequestExtension(TBSRequestExtension):
-    """A workaround class for MobiilID compatibility
+    """A workaround class for compatibility with old java libraries used in SK.ee
 
     The jdigidoc library used in the SK service fails to validate an OCSP request
     made up with the original TBSRequestExtension because it expects a plain OctetString in the value field.
@@ -28,7 +26,7 @@ class SKHackedTBSRequestExtension(TBSRequestExtension):
     ]
 
 
-class OCSPError(BDoc2Error):
+class OCSPError(PyAsiceError):
     pass
 
 

@@ -1,15 +1,13 @@
-# coding: utf-8
-from __future__ import unicode_literals
 import hashlib
 
 import requests
 from asn1crypto.cms import ContentInfo  # noqa
 from asn1crypto.tsp import TimeStampReq, TimeStampResp
 
-from .exceptions import BDoc2Error
+from .exceptions import PyAsiceError
 
 
-class TSAError(BDoc2Error):
+class TSAError(PyAsiceError):
     pass
 
 

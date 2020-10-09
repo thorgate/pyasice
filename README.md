@@ -4,11 +4,12 @@ The `pyasice` library is designed to:
 * create, read, and verify XAdES/XMLDsig/eIDAS electronic signatures,
 * validate signers' certificates,
 * confirm these signatures with TimeStamping, 
-* create and manipulate [ASiC-E](https://en.wikipedia.org/wiki/Associated_Signature_Containers) containers, 
+* create and manipulate [ASiC-E](https://en.wikipedia.org/wiki/Associated_Signature_Containers) or BDoc 2.1 containers, 
 which are based on the XAdES/eIDAS stack.  
 
 ## Contents
 
+* [Normative References](#normative-references)
 * [Module Layout](#module-layout)
 * [Technology Stack](#technology-stack)
 * [Build the XAdES XML Signature meta-file](#build-the-xades-xml-signature-meta-file)
@@ -19,11 +20,35 @@ which are based on the XAdES/eIDAS stack.
 * [Secondary Services](#secondary-services)
 * * [OCSP](#ocsp)
 * * [Timestamping Service](#timestamping-service)
-* [BDOC File Manipulation](#bdoc-file-manipulation)
+* [ASiC-E/BDOC Container File Manipulation](#asic-ebdoc-container-file-manipulation)
+
+## Normative References
+
+The main document this library is based on:
+the [BDOC 2.1.2 spec](https://www.id.ee/wp-content/uploads/2020/06/bdoc-spec212-eng.pdf).
+
+The specific standards outlined in that document:
+
+* [ETSI TS 101 903 v1.4.2](https://www.etsi.org/deliver/etsi_ts/101900_101999/101903/01.04.02_60/ts_101903v010402p.pdf) 
+  – XML Advanced Electronic Signatures (XAdES) and its Baseline Profile ETSI TS 103 171;
+* ITU-T Recommendation X.509;
+* [RFC 3161](https://tools.ietf.org/html/rfc3161) – PKIX Time-Stamp protocol;
+* [RFC 6960](https://tools.ietf.org/html/rfc6960) – Online Certificate Status Protocol;
+* ETSI TS 102 918 v1.2.1 - Associated Signature Containers (ASiC) and its
+  Baseline Profile ETSI TS 103 174.
+
+The difference between ASiC-E and BDOC is almost exclusively in the terminology use.
+
+The [BDOC 2.1.2 spec](https://www.id.ee/wp-content/uploads/2020/06/bdoc-spec212-eng.pdf) states:
+
+> The BDOC file format is based on ASiC standard which is in turn profiled by ASiC BP.
+> BDOC packaging is a ASiC-E XAdES type ZIP container ...
+
+So with a moderate risk of confusion, we can accept that ASiC-E and BDOC refer to the same thing.
 
 ## Module Layout
 
-* [container.py](container.py) -- the `BDoc2File` class, that deals with ASiC-E (BDOC v.2.1) container format 
+* [container.py](container.py) -- the `Container` class, that deals with ASiC-E (BDOC v.2.1) container format 
 * [xmlsig.py](xmlsig.py) -- the `XmlSignature` class, that deals with XAdES/XMLDSig XML structures
 * [ocsp.py](ocsp.py) -- the `OCSP` class that deals with OCSP requests and responses
 * [tsa.py](tsa.py) -- the `TSA` class that deals with TimeStamping service requests and responses
@@ -39,11 +64,12 @@ Dealing with the subject involves, at least:
 * and also requests to various services (obtaining signer's certificate and the signature,
   validating the certificate through OCSP, time-stamping the signature).
 
-The [asn1crypto](https://github.com/wbond/asn1crypto) library and its higher-level complement  [oscrypto](https://github.com/wbond/oscrypto)
+The [asn1crypto](https://github.com/wbond/asn1crypto) library and its higher-level complement 
+[oscrypto](https://github.com/wbond/oscrypto)
 allow handling certificates and ASN.1 structures quite easily.
 
-The [cryptography](https://cryptography.io/en/latest) library is by far the most powerful for dealing with public key
-cryptography algorithms.
+The [cryptography](https://cryptography.io/en/latest) library is by far the most powerful python library 
+for dealing with public key cryptography algorithms.
 
 
 ## Build the XAdES XML Signature meta-file
@@ -133,7 +159,7 @@ If it's not present, then the default, ie. not exclusive, c14n is used.
 
 ### KeyInfo
 
-This section contains just the certificate value as gotten from the SmartID API response's `cert.value`:
+This section contains just the base64-encoded user certificate value, e.g. the SmartID API response's `cert.value`:
 ```xml
 <ds:KeyInfo Id="S0-KeyInfo">
     <ds:X509Data>
@@ -150,8 +176,6 @@ The XML section of `SignedProperties` consists of, at least :question:, the `Sig
 #### SigningTime
 
 Is a timestamp in ISO 8601 format.
-
-:question: Is it enough to put a date of the SmartID sign request here? No obvious way to get the date from the SmartID API.
 
 #### SignaturePolicyIdentifier 
 
@@ -180,7 +204,7 @@ This appears to be a static^1 XML chunk referencing the BDOC 2.1 Specifications 
 
 #### SigningCertificate
 
-The SmartID API response's `cert.value` is a base64-encoded DER certificate which can be loaded as
+The user certificate is a base64-encoded DER certificate which can be loaded as follows:
 ```python
 import base64
 from cryptography import x509
@@ -188,7 +212,7 @@ from cryptography.hazmat.backends import default_backend
 cert_asn1 = base64.b64decode(cert_value)
 cert = x509.load_der_x509_certificate(base64.b64decode(cert_asn1), default_backend())
 ```
-or with
+or with `pyopenssl`:
 ```python
 import base64
 from OpenSSL.crypto import load_certificate, FILETYPE_ASN1
@@ -271,26 +295,38 @@ namely `xades:EncapsulatedTimeStamp`.
 More detail on the [sk.ee TSA page](https://www.sk.ee/en/services/time-stamping-service/)
 
 
-## BDOC File Manipulation
+## ASiC-E/BDOC Container File Manipulation
 
 
 Create a new container:
 ```python
+from pyasice import Container, XmlSignature
 
-bdoc = BDoc2File()
-bdoc\
-    .add_file('test.pdf', b'Test data', 'application/pdf')\
+xmlsig = XmlSignature.create().add_document('test.txt', b'Test data', 'application/pdf')
+# ... here goes the signing, confirming and timestamping part ... 
+
+container = Container()
+container\
+    .add_file('test.txt', b'Test data', 'application/pdf')\
     .add_signature(xmlsig)\
-    .save('test.bdoc')
+    .save('test.asice')
 ```
 
-Use `name=<filename>` to open an existing container:
+Use `Container(filename)` to open an existing container:
 ```python
-bdoc = BDoc2File('test.bdoc')
-bdoc.verify_signatures()
-with bdoc.open_file('test.pdf') as f:
+from pyasice import Container, XmlSignature
+
+container = Container('test.asice')
+
+# Verify container
+container.verify_signatures()
+
+# Read files in the container
+with container.open_file('test.txt') as f:
     assert f.read() == b'Test data'
 
+# Add signatures
 another_xmlsig = XmlSignature.create().add_document('name', b'content', 'mime/type')
-bdoc.add_signature(another_xmlsig).save()
+# ... here goes the signing, confirming and timestamping part ... 
+container.add_signature(another_xmlsig).save()
 ```
