@@ -11,7 +11,7 @@ class TSAError(PyAsiceError):
     pass
 
 
-class TSA(object):
+class TSA:
     """
     Query a Time Stamping Authority (TSA) for a signature time stamp
     """
@@ -25,15 +25,12 @@ class TSA(object):
         self.url = self.PROD_URL if url is None else url
         self.ts_response = None
 
-    def get_timestamp(self, message):
+    def get_timestamp(self, message: bytes) -> ContentInfo:
         """Get the time stamp structure for embedding in a XAdES signature
 
         How to prepare the message:
         https://www.etsi.org/deliver/etsi_ts/101900_101999/101903/01.04.02_60/ts_101903v010402p.pdf
         section 7.3
-
-        :param bytes message:
-        :return: ContentInfo
         """
         request = TimeStampReq(
             {
@@ -56,10 +53,10 @@ class TSA(object):
                 },
             )
             response.raise_for_status()
-        except requests.ConnectionError:
-            raise TSA("Failed to connect to TSA service at {}".format(self.url))
+        except requests.ConnectionError as e:
+            raise TSAError("Failed to connect to TSA service at {}".format(self.url)) from e
         except requests.HTTPError as e:
-            raise TSAError("Bad response from TSA service at {}: {}".format(self.url, e))
+            raise TSAError("Bad response from TSA service at {}: {}".format(self.url, e)) from e
 
         assert response.status_code == 200
         assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE

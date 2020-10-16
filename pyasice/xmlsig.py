@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime
-from typing import Union
+from typing import Optional, Union
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -23,7 +23,7 @@ def get_utc_time():
     return datetime.utcnow()
 
 
-class XmlSignature(object):
+class XmlSignature:
     """
     Usage:
 
@@ -37,14 +37,15 @@ class XmlSignature(object):
         signature_value = sign(id_code, sig.digest())
 
         # Get OCSP and TSA confirmation
-        from .utils import finalize_signature
-        finalize_signature(sig, lt_ts=True)
-
         result_xml = sig.set_signature_value(signature_value) \
             .verify() \
-            .set_ocsp_response(ocsp) \
-            .set_timestamp_response(ocsp) \
+            .set_ocsp_response(...) \
+            .set_timestamp_response(...) \
             .dump()
+
+        # or:
+        from .utils import finalize_signature
+        finalize_signature(sig, lt_ts=True)
     """
 
     SIGNATURE_TEMPLATE = os.path.join(os.path.dirname(__file__), "templates", "signature.xml")
@@ -111,6 +112,9 @@ class XmlSignature(object):
             xml_sig.doc_ids = []
             return xml_sig
 
+    def dump(self):
+        return b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(self.xml)
+
     def get_signed_time(self):
         return self._get_node("xades:SigningTime").text
 
@@ -118,6 +122,7 @@ class XmlSignature(object):
         if not self._certificate:
             cert_asn1 = self.get_certificate_value()
             if cert_asn1:
+                # cache it on the instance, may be used a few times
                 self._certificate = load_certificate(cert_asn1)
         return self._certificate
 
@@ -129,7 +134,7 @@ class XmlSignature(object):
 
     def get_certificate_issuer_common_name(self):
         subject_cert = self.get_certificate()
-        return subject_cert.asn1.issuer.native["common_name"]
+        return subject_cert.asn1.issuer.native["common_name"] if subject_cert else None
 
     def set_certificate(self, subject_cert: Union[bytes, Certificate]):
         """Set the certificate that would be used for signing
@@ -139,6 +144,7 @@ class XmlSignature(object):
         if not isinstance(subject_cert, Certificate):
             subject_cert = load_certificate(subject_cert)
 
+        # cache it on the instance, may be used a few times
         self._certificate = subject_cert
 
         cert_asn1 = subject_cert.asn1
@@ -149,12 +155,12 @@ class XmlSignature(object):
         cert_node.text = base64.b64encode(der_encoded_cert)
 
         cert_props = self._get_node("xades:SigningCertificate")
-        cert_props.find(".//ds:DigestValue", namespaces=self.NAMESPACES).text = base64.b64encode(cert_asn1.sha256)
-        cert_props.find(".//ds:X509SerialNumber", namespaces=self.NAMESPACES).text = serial_number
+        cert_props.find(".//ds:DigestValue", self.NAMESPACES).text = base64.b64encode(cert_asn1.sha256)
+        cert_props.find(".//ds:X509SerialNumber", self.NAMESPACES).text = serial_number
 
         # No idea what value is possible, but rfc4514 is most common, so get it from a cryptography object
         x509_cert = x509.load_der_x509_certificate(der_encoded_cert, default_backend())
-        cert_props.find(".//ds:X509IssuerName", namespaces=self.NAMESPACES).text = x509_cert.issuer.rfc4514_string()
+        cert_props.find(".//ds:X509IssuerName", self.NAMESPACES).text = x509_cert.issuer.rfc4514_string()
 
         return self
 
@@ -167,20 +173,20 @@ class XmlSignature(object):
         :param hash_type: the hash function to use for digesting
         :return:
         """
-        if hash_type not in self.DIGEST_ALGORITHMS:
-            raise ValueError("Unknown hash type: %s" % hash_type)
+        try:
+            digest_algo = self.DIGEST_ALGORITHMS[hash_type]
+        except KeyError as e:
+            raise ValueError("Unknown hash type: %s" % hash_type) from e
 
         digest_fn = getattr(hashlib, hash_type)
         doc_hash = digest_fn(binary_data).digest()
 
         signed_info = self._get_node("ds:SignedInfo")
-        first_ref_entry = signed_info.find('.//ds:Reference[@Type=""]', namespaces=self.NAMESPACES)
+        first_ref_entry = signed_info.find('.//ds:Reference[@Type=""]', self.NAMESPACES)
         doc_id = first_ref_entry.attrib["Id"]
 
         doc_props = self._get_node("xades:SignedDataObjectProperties")
-        first_doc_entry = doc_props.find(
-            './/xades:DataObjectFormat[@ObjectReference="#%s"]' % doc_id, namespaces=self.NAMESPACES
-        )
+        first_doc_entry = doc_props.find('.//xades:DataObjectFormat[@ObjectReference="#%s"]' % doc_id, self.NAMESPACES)
 
         if self.doc_ids:
             next_num = len(self.doc_ids) + 1
@@ -206,13 +212,11 @@ class XmlSignature(object):
         self.doc_ids.append(new_doc_id)
         new_ref_entry.attrib["Id"] = new_doc_id
         new_ref_entry.attrib["URI"] = file_name
-        new_ref_entry.find(".//ds:DigestMethod", namespaces=self.NAMESPACES).attrib[
-            "Algorithm"
-        ] = self.DIGEST_ALGORITHMS[hash_type]
-        new_ref_entry.find(".//ds:DigestValue", namespaces=self.NAMESPACES).text = base64.b64encode(doc_hash)
+        new_ref_entry.find(".//ds:DigestMethod", self.NAMESPACES).attrib["Algorithm"] = digest_algo
+        new_ref_entry.find(".//ds:DigestValue", self.NAMESPACES).text = base64.b64encode(doc_hash)
 
         new_doc_entry.attrib["ObjectReference"] = "#%s" % new_doc_id
-        new_doc_entry.find(".//xades:MimeType", namespaces=self.NAMESPACES).text = mime_type
+        new_doc_entry.find(".//xades:MimeType", self.NAMESPACES).text = mime_type
 
         return self
 
@@ -220,7 +224,7 @@ class XmlSignature(object):
         """Calculate the digest over SignedProperties and embed it in SignedInfo"""
 
         sp_ref_node = next(
-            self.xml.find('.//ds:SignedInfo/ds:Reference[@Type="%s"]' % ref_type, namespaces=self.NAMESPACES)
+            self.xml.find('.//ds:SignedInfo/ds:Reference[@Type="%s"]' % ref_type, self.NAMESPACES)
             for ref_type in self.SIGNED_PROPERTIES_TYPE
         )
 
@@ -233,7 +237,7 @@ class XmlSignature(object):
             c14n_alg = None
 
         signed_props_node = self._get_node("xades:SignedProperties")
-        time_node = signed_props_node.find(".//xades:SigningTime", namespaces=self.NAMESPACES)
+        time_node = signed_props_node.find(".//xades:SigningTime", self.NAMESPACES)
         # Add a UTC timestamp. Can't use isoformat() as it adds +00:00 and microseconds
         #  which can break the parser elsewhere
         time_node.text = get_utc_time().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -241,7 +245,7 @@ class XmlSignature(object):
         signed_props_c14n = self.canonicalize(signed_props_node, c14n_alg)
         # TODO select algorithm based on DigestMethod // update DigestMethod
         signed_props_hash = hashlib.sha256(signed_props_c14n).digest()
-        sp_ref_node.find(".//ds:DigestValue", namespaces=self.NAMESPACES).text = base64.b64encode(signed_props_hash)
+        sp_ref_node.find(".//ds:DigestValue", self.NAMESPACES).text = base64.b64encode(signed_props_hash)
 
         return self
 
@@ -254,6 +258,14 @@ class XmlSignature(object):
         hash_algo_name = signature_algo.split("-")[-1]
         hash_algo = getattr(hashlib, hash_algo_name)
         return hash_algo(self.signed_data()).digest()
+
+    def verify(self):
+        hash_algo = self.get_signature_algorithm().split("-")[-1]
+        cert = self.get_certificate_value()
+        signature = self.get_signature_value()
+        signed_data = self.signed_data()
+        verify(cert, signature, signed_data, hash_algo)
+        return self
 
     def get_signature_value(self):
         sig_value_node = self._get_node("ds:SignatureValue")
@@ -305,10 +317,27 @@ class XmlSignature(object):
         sig_method_node.attrib["Algorithm"] = self.SIGNATURE_ALGO_ID_TEMPLATE.format(algo=algo)
         return self
 
-    def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
-        """Add a root CA cert
+    def get_root_ca_cert(self) -> Optional[Certificate]:
+        """
+        Iterates through encapsulated certificates and finds the root CA certificate.
 
-        :param root_cert: can be a PEM-encoded bytes content, or an `oscrypto.Certificate` object
+        There can be any number of encapsulated certs in no particular order, but should be only one root ca cert.
+        It is identified by its subject being equal to the issuer of the user cert.
+        """
+        user_cert_issuer_cn = self.get_certificate_issuer_common_name()
+        if user_cert_issuer_cn is None:
+            return None
+        certs_node = self._get_node("xades:CertificateValues")
+        for el in certs_node.findall(".//xades:EncapsulatedX509Certificate", self.NAMESPACES):
+            cert = load_certificate(base64.b64decode(el.text))
+            if cert.asn1.subject.native["common_name"] == user_cert_issuer_cn:
+                return cert
+        return None
+
+    def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
+        """Sets a root CA cert.
+
+        :param root_cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
         """
         certs_node = self._get_node("xades:CertificateValues")
         ca_node = etree.Element("{%s}EncapsulatedX509Certificate" % self.NAMESPACES["xades"])
@@ -366,17 +395,6 @@ class XmlSignature(object):
         ts_value_node.getparent().remove(ts_value_node)
         return self
 
-    def dump(self):
-        return b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(self.xml)
-
-    def verify(self):
-        hash_algo = self.get_signature_algorithm().split("-")[-1]
-        cert = self.get_certificate_value()
-        signature = self.get_signature_value()
-        signed_data = self.signed_data()
-        verify(cert, signature, signed_data, hash_algo)
-        return self
-
     def get_c14n_method(self, parent_node="ds:SignedInfo"):
         """Get a c14n method used within a specific context given by `parent_node`
 
@@ -399,5 +417,5 @@ class XmlSignature(object):
         exclusive = "xml-exc-c14n" in method
         return etree.tostring(node, method="c14n", exclusive=exclusive)
 
-    def _get_node(self, tag_name) -> etree.Element:
+    def _get_node(self, tag_name) -> etree._Element:
         return self.xml.find(".//{}".format(tag_name), namespaces=self.NAMESPACES)

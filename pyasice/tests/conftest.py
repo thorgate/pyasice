@@ -27,7 +27,7 @@ def private_key_rsa():
     return rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
 
 
-def _cert_builder(private_key):
+def cert_builder(private_key, subject="signing user", issuer="issuer CA"):
     """
     https://cryptography.io/en/latest/x509/reference/#x-509-certificate-builder
     """
@@ -36,14 +36,14 @@ def _cert_builder(private_key):
     builder = builder.subject_name(
         x509.Name(
             [
-                x509.NameAttribute(NameOID.COMMON_NAME, "cryptography.io"),
+                x509.NameAttribute(NameOID.COMMON_NAME, subject),
             ]
         )
     )
     builder = builder.issuer_name(
         x509.Name(
             [
-                x509.NameAttribute(NameOID.COMMON_NAME, "cryptography.io"),
+                x509.NameAttribute(NameOID.COMMON_NAME, issuer),
             ]
         )
     )
@@ -51,7 +51,6 @@ def _cert_builder(private_key):
     builder = builder.not_valid_after(datetime.today() + timedelta(days=5))
     builder = builder.serial_number(x509.random_serial_number())
     builder = builder.public_key(public_key)
-    builder = builder.add_extension(x509.SubjectAlternativeName([x509.DNSName("cryptography.io")]), critical=False)
     builder = builder.add_extension(
         x509.BasicConstraints(ca=False, path_length=None),
         critical=True,
@@ -62,21 +61,22 @@ def _cert_builder(private_key):
 
 @pytest.fixture()
 def certificate_ec(private_key_ec) -> Certificate:
-    return _cert_builder(private_key_ec)
+    return cert_builder(private_key_ec)
 
 
 @pytest.fixture()
 def certificate_rsa(private_key_rsa) -> Certificate:
-    return _cert_builder(private_key_rsa)
+    return cert_builder(private_key_rsa)
 
 
 def generate_xml_signature(certificate: Certificate, signature_algo=None):
-    s = XmlSignature.create()
-    s.set_signature_algorithm(signature_algo).add_document("test.txt", b"test", "text/plain").set_certificate(
-        certificate.public_bytes(Encoding.DER)
-    ).update_signed_info()
-
-    return s
+    return (
+        XmlSignature.create()
+        .set_signature_algorithm(signature_algo)
+        .add_document("test.txt", b"test", "text/plain")
+        .set_certificate(certificate.public_bytes(Encoding.DER))
+        .update_signed_info()
+    )
 
 
 @pytest.fixture()

@@ -8,13 +8,12 @@ import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding
 from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.x509 import Certificate as X509Certificate
 from lxml import etree
 from oscrypto.asymmetric import Certificate, load_certificate
 
 from .. import verify, xmlsig
 from ..xmlsig import XmlSignature
-from .conftest import generate_xml_signature
+from .conftest import cert_builder, generate_xml_signature
 
 
 def test_xmlsig_create():
@@ -89,7 +88,7 @@ def test_xmlsig_documents():
     assert xml_signature._get_node('ds:Reference[@Id="r-id-1"]').attrib["URI"] == "test.txt"
     assert xml_signature._get_node('ds:Reference[@Id="r-id-1"]/ds:DigestValue').text == digest
     assert (
-        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-1"]' "/xades:MimeType").text
+        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-1"]/xades:MimeType').text
         == "text/plain"
     )
 
@@ -100,7 +99,7 @@ def test_xmlsig_documents():
     assert xml_signature._get_node('ds:Reference[@Id="r-id-2"]').attrib["URI"] == "test2.pdf"
     assert xml_signature._get_node('ds:Reference[@Id="r-id-2"]/ds:DigestValue').text == digest
     assert (
-        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-2"]' "/xades:MimeType").text
+        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-2"]/xades:MimeType').text
         == "application/pdf"
     )
 
@@ -119,7 +118,15 @@ def test_xmlsig_sign_rsa(certificate_rsa, private_key_rsa, signature_algo):
     xml_signature.set_signature_value(signature)
 
     xml_signature.verify()
-    assert "No exception was raised by the previous call"
+
+    verify(
+        xml_signature.get_certificate_value(),
+        signature,
+        xml_signature.digest(),
+        hash_algo,
+        prehashed=True,
+    )
+    assert "No exception was raised"
 
 
 @pytest.mark.parametrize("signature_algo", [None, "rsa-sha512", "ecdsa-sha256", "ecdsa-sha512"])
@@ -137,4 +144,26 @@ def test_xmlsig_sign_ec(certificate_ec, private_key_ec, signature_algo):
     xml_signature.set_signature_value(signature)
 
     xml_signature.verify()
-    assert "No exception was raised by the previous call"
+
+    verify(
+        xml_signature.get_certificate_value(),
+        signature,
+        xml_signature.digest(),
+        hash_algo,
+        prehashed=True,
+    )
+    assert "No exception was raised"
+
+
+def test_xmlsig_root_ca_get_set(certificate_rsa, private_key_rsa):
+    xml_signature = generate_xml_signature(certificate_rsa)
+    assert xml_signature.get_root_ca_cert() is None
+
+    some_encapsulated_cert = cert_builder(private_key_rsa, subject="my service", issuer="my authority")
+    xml_signature.set_root_ca_cert(some_encapsulated_cert.public_bytes(Encoding.DER))
+    assert xml_signature.get_root_ca_cert() is None
+
+    root_ca_cert = cert_builder(private_key_rsa, subject="issuer CA", issuer="Authority")
+    xml_signature.set_root_ca_cert(root_ca_cert.public_bytes(Encoding.DER))
+
+    assert xml_signature.get_root_ca_cert().asn1.subject.native["common_name"] == "issuer CA"

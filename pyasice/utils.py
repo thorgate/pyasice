@@ -1,5 +1,3 @@
-from oscrypto.asymmetric import load_certificate
-
 from .container import Container
 from .exceptions import NoFilesToSign
 from .ocsp import OCSP
@@ -35,8 +33,7 @@ def finalize_signature(xml_signature: XmlSignature, lt_ts=False):
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
     """
     subject_cert = xml_signature.get_certificate()
-    issuer_cn = subject_cert.asn1.issuer.native["common_name"]
-    issuer_cert = load_certificate(certs.get_certificate_file_name(issuer_cn))
+    issuer_cert = xml_signature.get_root_ca_cert()
 
     # Get an OCSP status confirmation
     ocsp = OCSP(url=OCSP.DEMO_URL if is_demo else None)
