@@ -13,6 +13,7 @@ class ECDSASignature(Sequence):
     """
     Represents a DER-encoded ECDSA signature sequence
     """
+
     _fields = [
         ("r", Integer),
         ("s", Integer),
@@ -26,15 +27,12 @@ def x962_to_der(signature: bytes):
     X.962 is a raw big-endian concatenation of two 32 byte long primes.
     """
     num_length = len(signature) // 2
-    r_prime, s_prime = [
-        int.from_bytes(x, "big")
-        for x in (signature[:num_length], signature[num_length:])
-    ]
+    r_prime, s_prime = [int.from_bytes(x, "big") for x in (signature[:num_length], signature[num_length:])]
 
     return ECDSASignature({"r": r_prime, "s": s_prime}).dump()
 
 
-def verify(certificate, signature, data, hash_algo='SHA256', prehashed=False):
+def verify(certificate, signature, data, hash_algo="SHA256", prehashed=False):
     """Verify RSA and EC signatures with the cryptography library
 
     :param Union[bytes, Certificate] certificate:
@@ -48,7 +46,7 @@ def verify(certificate, signature, data, hash_algo='SHA256', prehashed=False):
         certificate = load_der_x509_certificate(certificate, default_backend())
 
     hash_algo = hash_algo.upper()
-    if hash_algo not in ('SHA256', 'SHA384', 'SHA512'):
+    if hash_algo not in ("SHA256", "SHA384", "SHA512"):
         raise InvalidSignatureAlgorithm(hash_algo)
 
     hasher = getattr(hashes, hash_algo)
@@ -71,17 +69,8 @@ def verify(certificate, signature, data, hash_algo='SHA256', prehashed=False):
             except ValueError:
                 signature = x962_to_der(signature)
 
-            public_key.verify(
-                signature,
-                data,
-                ec.ECDSA(chosen_hash)
-            )
+            public_key.verify(signature, data, ec.ECDSA(chosen_hash))
         else:
-            public_key.verify(
-                signature,
-                data,
-                padding.PKCS1v15(),
-                chosen_hash
-            )
+            public_key.verify(signature, data, padding.PKCS1v15(), chosen_hash)
     except InvalidSignature:
         raise SignatureVerificationError()

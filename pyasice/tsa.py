@@ -15,10 +15,11 @@ class TSA(object):
     """
     Query a Time Stamping Authority (TSA) for a signature time stamp
     """
-    DEMO_URL = 'http://demo.sk.ee/tsa/'
-    PROD_URL = 'http://tsa.sk.ee'
-    REQUEST_CONTENT_TYPE = 'application/timestamp-query'
-    RESPONSE_CONTENT_TYPE = 'application/timestamp-reply'
+
+    DEMO_URL = "http://demo.sk.ee/tsa/"
+    PROD_URL = "http://tsa.sk.ee"
+    REQUEST_CONTENT_TYPE = "application/timestamp-query"
+    RESPONSE_CONTENT_TYPE = "application/timestamp-reply"
 
     def __init__(self, url=None):
         self.url = self.PROD_URL if url is None else url
@@ -34,25 +35,25 @@ class TSA(object):
         :param bytes message:
         :return: ContentInfo
         """
-        request = TimeStampReq({
-            'version': 'v1',
-            'message_imprint': {
-                'hash_algorithm': {
-                    'algorithm': 'sha256'
+        request = TimeStampReq(
+            {
+                "version": "v1",
+                "message_imprint": {
+                    "hash_algorithm": {"algorithm": "sha256"},
+                    "hashed_message": hashlib.sha256(message).digest(),
                 },
-                'hashed_message': hashlib.sha256(message).digest(),
-            },
-            'cert_req': True,  # Need the TSA cert in the response for validation
-        })
+                "cert_req": True,  # Need the TSA cert in the response for validation
+            }
+        )
 
         try:
             response = requests.post(
                 self.url,
                 data=request.dump(),
                 headers={
-                    'Content-Type': self.REQUEST_CONTENT_TYPE,
-                    'Connection': 'close',
-                }
+                    "Content-Type": self.REQUEST_CONTENT_TYPE,
+                    "Connection": "close",
+                },
             )
             response.raise_for_status()
         except requests.ConnectionError:
@@ -61,10 +62,10 @@ class TSA(object):
             raise TSAError("Bad response from TSA service at {}: {}".format(self.url, e))
 
         assert response.status_code == 200
-        assert response.headers['Content-Type'] == self.RESPONSE_CONTENT_TYPE
+        assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
 
         ts_response = TimeStampResp.load(response.content)
-        assert ts_response['status']['status_string'][0].native == 'Operation Okay'
+        assert ts_response["status"]["status_string"][0].native == "Operation Okay"
 
         self.ts_response = ts_response
-        return ts_response['time_stamp_token']
+        return ts_response["time_stamp_token"]

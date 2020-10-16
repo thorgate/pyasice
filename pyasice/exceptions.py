@@ -2,6 +2,7 @@ class PyAsiceError(Exception):
     """
     A generic exception that can happen while dealing with ASic-E/BDoc 2 files/signatures
     """
+
     pass
 
 

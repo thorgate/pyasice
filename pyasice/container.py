@@ -2,7 +2,7 @@ import io
 import os
 import re
 from typing import BinaryIO, Optional, Union
-from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
+from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from lxml import etree
 
@@ -34,26 +34,27 @@ class Container(object):
 
     Spec: https://www.id.ee/public/bdoc-spec212-eng.pdf [1]
     """
+
     FormatError = ContainerFormatError  # save an import for the class users
 
-    META_DIR = 'META-INF'
+    META_DIR = "META-INF"
     # > The names of these files shall contain the string "signatures" [1], ch.8
-    SIGNATURE_FILES_REGEX = r'^%s/signatures(\d+)\.xml$' % META_DIR
-    SIGNATURE_FILES_TEMPLATE = '%s/signatures{}.xml' % META_DIR
+    SIGNATURE_FILES_REGEX = r"^%s/signatures(\d+)\.xml$" % META_DIR
+    SIGNATURE_FILES_TEMPLATE = "%s/signatures{}.xml" % META_DIR
 
     # Manifest structure constants
-    MANIFEST_FILE = 'manifest.xml'
+    MANIFEST_FILE = "manifest.xml"
     MANIFEST_NS = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
     MANIFEST_NAMESPACES = {
-        'manifest': MANIFEST_NS,
+        "manifest": MANIFEST_NS,
     }
-    MANIFEST_TAG_FILE_ENTRY = '{%s}file-entry' % MANIFEST_NS
-    MANIFEST_ATTR_MEDIA_TYPE = '{%s}media-type' % MANIFEST_NS
-    MANIFEST_ATTR_FULL_PATH = '{%s}full-path' % MANIFEST_NS
+    MANIFEST_TAG_FILE_ENTRY = "{%s}file-entry" % MANIFEST_NS
+    MANIFEST_ATTR_MEDIA_TYPE = "{%s}media-type" % MANIFEST_NS
+    MANIFEST_ATTR_FULL_PATH = "{%s}full-path" % MANIFEST_NS
 
-    MANIFEST_TEMPLATE_FILE = os.path.join(os.path.dirname(__file__), 'templates', 'manifest.xml')
-    MIME_TYPE = 'application/vnd.etsi.asic-e+zip'
-    MIME_TYPE_FILE = 'mimetype'
+    MANIFEST_TEMPLATE_FILE = os.path.join(os.path.dirname(__file__), "templates", "manifest.xml")
+    MIME_TYPE = "application/vnd.etsi.asic-e+zip"
+    MIME_TYPE_FILE = "mimetype"
 
     def __init__(self, name_or_file: Optional[Union[BinaryIO, str]] = None):
         """
@@ -67,7 +68,7 @@ class Container(object):
 
         if name_or_file is None:
             buffer = io.BytesIO()
-            self._zip_file = ZipFile(buffer, 'a')
+            self._zip_file = ZipFile(buffer, "a")
 
             # add mimetype immediately, so that it's the first file in the TOC
             self._add_mimetype()
@@ -79,17 +80,17 @@ class Container(object):
             if isinstance(name_or_file, io.BytesIO):
                 buffer = name_or_file
                 buffer.seek(0)
-            elif hasattr(name_or_file, 'read') and callable(name_or_file.read):
+            elif hasattr(name_or_file, "read") and callable(name_or_file.read):
                 # Treat name_or_file as an open file handle
                 buffer = io.BytesIO(name_or_file.read())
             else:
                 # Treat name_or_file as file name
                 self.name = name_or_file
-                with open(name_or_file, 'rb') as f:
+                with open(name_or_file, "rb") as f:
                     buffer = io.BytesIO(f.read())
 
             # create a zip file in 'append' mode, to make possible both reading and adding files
-            self._zip_file = ZipFile(buffer, 'a')
+            self._zip_file = ZipFile(buffer, "a")
 
             self._verify_container_contents()
             self._manifest_write_required = False
@@ -114,8 +115,7 @@ class Container(object):
         return self._zip_buffer
 
     def save(self, name=None):
-        """Create the actual BDoc file in FS, with current content
-        """
+        """Create the actual BDoc file in FS, with current content"""
         if name is None:
             name = self.name
 
@@ -127,11 +127,11 @@ class Container(object):
 
         self._write_manifest()
 
-        with open(name, 'wb') as f:
+        with open(name, "wb") as f:
             f.write(self.get_contents())
         return self
 
-    def add_file(self, file_name: str, binary_data: bytes, mime_type='application/octet-stream', compress=True):
+    def add_file(self, file_name: str, binary_data: bytes, mime_type="application/octet-stream", compress=True):
         """Add a data file.
 
         :param file_name: the name of the file in the Zip archive
@@ -160,7 +160,7 @@ class Container(object):
     def get_contents(self):
         self._zip_file.close()
         value = self._zip_buffer.getvalue()
-        self._zip_file = ZipFile(self._zip_buffer, 'a')
+        self._zip_file = ZipFile(self._zip_buffer, "a")
         return value
 
     def has_data_files(self):
@@ -216,7 +216,7 @@ class Container(object):
     def verify_container(self):
         failed = self._zip_file.testzip()
         if failed:
-            raise ContainerFormatError('The container contains errors. First broken file: %s' % failed)
+            raise ContainerFormatError("The container contains errors. First broken file: %s" % failed)
         return self
 
     def _write_manifest(self):
@@ -230,8 +230,7 @@ class Container(object):
             self._delete_files(self._manifest_file_name)
 
         self._zip_file.writestr(
-            self._manifest_file_name,
-            b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
+            self._manifest_file_name, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
         )
 
     def _add_mimetype(self):
@@ -245,24 +244,20 @@ class Container(object):
     def _get_manifest_xml(self):
         if self._manifest is None:
             # Create a manifest from template
-            with open(self.MANIFEST_TEMPLATE_FILE, 'rb') as f:
+            with open(self.MANIFEST_TEMPLATE_FILE, "rb") as f:
                 self._manifest = etree.XML(f.read())
         return self._manifest
 
     @property
     def _manifest_file_name(self):
-        return '{}/{}'.format(self.META_DIR, self.MANIFEST_FILE)
+        return "{}/{}".format(self.META_DIR, self.MANIFEST_FILE)
 
     def _enumerate_signatures(self):
-        return [
-            file_name
-            for file_name in self._read_toc()
-            if re.match(self.SIGNATURE_FILES_REGEX, file_name)
-        ]
+        return [file_name for file_name in self._read_toc() if re.match(self.SIGNATURE_FILES_REGEX, file_name)]
 
     def _delete_files(self, *file_names_to_delete):
         new_buf = io.BytesIO()
-        new_zip_file = ZipFile(new_buf, 'a')
+        new_zip_file = ZipFile(new_buf, "a")
         file_names_to_delete = set(file_names_to_delete)
         for entry in self._zip_file.infolist():
             file_name = entry.filename
@@ -288,7 +283,7 @@ class Container(object):
         for file_entry in manifest_xml.iterchildren():
             assert file_entry.tag == self.MANIFEST_TAG_FILE_ENTRY
             file_name = file_entry.attrib[full_path_attr]
-            if file_name != '/':  # skip the 'root' entry
+            if file_name != "/":  # skip the 'root' entry
                 yield file_name, file_entry.attrib[media_type_attr]
 
     def _verify_container_contents(self):
@@ -307,9 +302,7 @@ class Container(object):
                 f"Container '{self}' must contain mime type file '{self.MIME_TYPE_FILE}' as first file"
             )
         if self._manifest_file_name not in toc:
-            raise ContainerFormatError(
-                f"Container '{self}' does not contain manifest file '{self.MANIFEST_FILE}'"
-            )
+            raise ContainerFormatError(f"Container '{self}' does not contain manifest file '{self.MANIFEST_FILE}'")
 
         # Read the meta data
         with self.open_file(self.MIME_TYPE_FILE) as f:

@@ -1,15 +1,16 @@
 import hashlib
 
 import pytest
+
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding
 
-from ..signature_verifier import verify, ECDSASignature
+from ..signature_verifier import ECDSASignature, verify
 
 
 def der_to_x962(signature):
     der_seq = ECDSASignature.load(signature)
-    r_prime, s_prime = int(der_seq['r']), int(der_seq['s'])
+    r_prime, s_prime = int(der_seq["r"]), int(der_seq["s"])
     buf = []
     for num in (s_prime, r_prime):
         for _ in range(66):  # each prime should be exactly 66 bytes for the 521-bit EC
@@ -21,10 +22,10 @@ def der_to_x962(signature):
 
 @pytest.fixture()
 def signed_data():
-    return b'Just some data to sign'
+    return b"Just some data to sign"
 
 
-@pytest.mark.parametrize('x962', [True, False])
+@pytest.mark.parametrize("x962", [True, False])
 def test_verify_data_ec(private_key_ec, certificate_ec, signed_data, x962):
     signature = private_key_ec.sign(signed_data, ec.ECDSA(hashes.SHA256()))
 
@@ -39,7 +40,7 @@ def test_verify_data_ec(private_key_ec, certificate_ec, signed_data, x962):
     assert "No exception was raised by the previous call"
 
 
-@pytest.mark.parametrize('x962', [True, False])
+@pytest.mark.parametrize("x962", [True, False])
 def test_verify_hash_ec(private_key_ec, certificate_ec, signed_data, x962):
     signature = private_key_ec.sign(signed_data, ec.ECDSA(hashes.SHA256()))
 
@@ -57,11 +58,7 @@ def test_verify_hash_ec(private_key_ec, certificate_ec, signed_data, x962):
 
 
 def test_verify_data_rsa(private_key_rsa, certificate_rsa, signed_data):
-    signature = private_key_rsa.sign(
-        signed_data,
-        padding.PKCS1v15(),
-        hashes.SHA256()
-    )
+    signature = private_key_rsa.sign(signed_data, padding.PKCS1v15(), hashes.SHA256())
 
     private_key_rsa.public_key().verify(signature, signed_data, padding.PKCS1v15(), hashes.SHA256())
 

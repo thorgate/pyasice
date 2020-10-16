@@ -1,13 +1,11 @@
 import hashlib
 
-from oscrypto import asymmetric
-
+import requests
 from asn1crypto.algos import DigestInfo
 from asn1crypto.core import Boolean, OctetString
 from asn1crypto.ocsp import OCSPRequest, OCSPResponse, TBSRequest, TBSRequestExtension, TBSRequestExtensionId
 from asn1crypto.x509 import Certificate
-
-import requests
+from oscrypto import asymmetric
 
 from .exceptions import PyAsiceError
 
@@ -19,10 +17,11 @@ class SKHackedTBSRequestExtension(TBSRequestExtension):
     made up with the original TBSRequestExtension because it expects a plain OctetString in the value field.
     This does not break validation with newer libraries including digidoc-tool
     """
+
     _fields = [
-        ('extn_id', TBSRequestExtensionId),
-        ('critical', Boolean, {'default': False}),
-        ('extn_value', OctetString),  # This replaces ParsableOctetString
+        ("extn_id", TBSRequestExtensionId),
+        ("critical", Boolean, {"default": False}),
+        ("extn_value", OctetString),  # This replaces ParsableOctetString
     ]
 
 
@@ -43,15 +42,15 @@ class OCSP(object):
 
         ocsp = OCSP.load(der_encoded_binary_data)
     """
-    DEMO_URL = 'http://demo.sk.ee/ocsp'
-    PROD_URL = 'http://ocsp.sk.ee/'
 
-    REQUEST_CONTENT_TYPE = 'application/ocsp-request'
-    RESPONSE_CONTENT_TYPE = 'application/ocsp-response'
+    DEMO_URL = "http://demo.sk.ee/ocsp"
+    PROD_URL = "http://ocsp.sk.ee/"
+
+    REQUEST_CONTENT_TYPE = "application/ocsp-request"
+    RESPONSE_CONTENT_TYPE = "application/ocsp-response"
 
     def __init__(self, url=None):
-        """
-        """
+        """"""
         self.url = self.PROD_URL if url is None else url
         self.ocsp_response = None
 
@@ -75,7 +74,7 @@ class OCSP(object):
             response = requests.post(
                 self.url,
                 data=ocsp_request.dump(),
-                headers={'Content-Type': self.REQUEST_CONTENT_TYPE, 'Connection': 'close'}
+                headers={"Content-Type": self.REQUEST_CONTENT_TYPE, "Connection": "close"},
             )
             response.raise_for_status()
         except requests.ConnectionError:
@@ -84,11 +83,11 @@ class OCSP(object):
             raise OCSPError("Bad response from OCSP service at {}: {}".format(self.url, e))
 
         assert response.status_code == 200  # this wouldn't tell anything yet
-        assert response.headers['Content-Type'] == self.RESPONSE_CONTENT_TYPE
+        assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
 
         ocsp_response = OCSPResponse.load(response.content)
-        ocsp_status = ocsp_response['response_status'].native
-        if ocsp_status != 'successful':
+        ocsp_status = ocsp_response["response_status"].native
+        if ocsp_status != "successful":
             raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
 
         self.ocsp_response = ocsp_response
@@ -99,7 +98,7 @@ class OCSP(object):
 
         :return: Tuple[asn1crypto.x509.Certificate]
         """
-        return tuple(self.ocsp_response.basic_ocsp_response['certs'])
+        return tuple(self.ocsp_response.basic_ocsp_response["certs"])
 
     def get_encapsulated_response(self):
         """Get a DER-encoded OCSP response"""
@@ -121,33 +120,42 @@ class OCSP(object):
         extensions = None
         if signature is not None:
             nonce = cls.build_nonce(signature)
-            extensions = [SKHackedTBSRequestExtension({
-                'extn_id': 'nonce',
-                'critical': False,
-                'extn_value': nonce.dump(),
-            })]
+            extensions = [
+                SKHackedTBSRequestExtension(
+                    {
+                        "extn_id": "nonce",
+                        "critical": False,
+                        "extn_value": nonce.dump(),
+                    }
+                )
+            ]
 
         tbs_request = cls.build_tbs_request(subject_cert.asn1, issuer_cert.asn1, tbs_request_extensions=extensions)
-        ocsp_request = OCSPRequest({
-            'tbs_request': tbs_request,
-            'optional_signature': None,
-        })
+        ocsp_request = OCSPRequest(
+            {
+                "tbs_request": tbs_request,
+                "optional_signature": None,
+            }
+        )
         return ocsp_request
 
     @classmethod
     def build_nonce(cls, signature):
         digest = hashlib.sha256(signature).digest()
-        obj = DigestInfo({
-            'digest_algorithm': {
-                'algorithm': 'sha256',
-            },
-            'digest': digest,
-        })
+        obj = DigestInfo(
+            {
+                "digest_algorithm": {
+                    "algorithm": "sha256",
+                },
+                "digest": digest,
+            }
+        )
         return obj
 
     @classmethod
-    def build_tbs_request(cls, subject_cert, issuer_cert, tbs_request_extensions=None, request_extensions=None,
-                          _key_hash_algo='sha1'):
+    def build_tbs_request(
+        cls, subject_cert, issuer_cert, tbs_request_extensions=None, request_extensions=None, _key_hash_algo="sha1"
+    ):
         """Build a TBSRequest entry for OCSPRequest
 
         :param asn1crypto.x509.Certificate subject_cert:
@@ -157,19 +165,19 @@ class OCSP(object):
         :param string _key_hash_algo:
         :return:
         """
-        return TBSRequest({
-            'request_list': [
-                {
-                    'req_cert': {
-                        'hash_algorithm': {
-                            'algorithm': _key_hash_algo
+        return TBSRequest(
+            {
+                "request_list": [
+                    {
+                        "req_cert": {
+                            "hash_algorithm": {"algorithm": _key_hash_algo},
+                            "issuer_name_hash": getattr(subject_cert.issuer, _key_hash_algo),
+                            "issuer_key_hash": getattr(issuer_cert.public_key, _key_hash_algo),
+                            "serial_number": subject_cert.serial_number,
                         },
-                        'issuer_name_hash': getattr(subject_cert.issuer, _key_hash_algo),
-                        'issuer_key_hash': getattr(issuer_cert.public_key, _key_hash_algo),
-                        'serial_number': subject_cert.serial_number,
-                    },
-                    'single_request_extensions': request_extensions,
-                }
-            ],
-            'request_extensions': tbs_request_extensions,
-        })
+                        "single_request_extensions": request_extensions,
+                    }
+                ],
+                "request_extensions": tbs_request_extensions,
+            }
+        )

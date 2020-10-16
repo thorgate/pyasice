@@ -23,9 +23,7 @@ def prepare_signature(user_certificate: bytes, root_certificate: bytes, containe
     for file_name, content, mime_type in container.iter_data_files():
         xml_sig.add_document(file_name, content, mime_type)
 
-    xml_sig.set_certificate(user_certificate) \
-        .set_root_ca_cert(root_certificate) \
-        .update_signed_info()
+    xml_sig.set_certificate(user_certificate).set_root_ca_cert(root_certificate).update_signed_info()
 
     return xml_sig
 
@@ -37,7 +35,7 @@ def finalize_signature(xml_signature: XmlSignature, lt_ts=False):
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
     """
     subject_cert = xml_signature.get_certificate()
-    issuer_cn = subject_cert.asn1.issuer.native['common_name']
+    issuer_cn = subject_cert.asn1.issuer.native["common_name"]
     issuer_cert = load_certificate(certs.get_certificate_file_name(issuer_cn))
 
     # Get an OCSP status confirmation
