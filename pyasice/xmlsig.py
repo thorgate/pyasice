@@ -40,10 +40,10 @@ class XmlSignature(object):
         from .utils import finalize_signature
         finalize_signature(sig, lt_ts=True)
 
-        result_xml = sig.add_signature(signature_value) \
+        result_xml = sig.set_signature_value(signature_value) \
             .verify() \
-            .add_ocsp_response(ocsp) \
-            .add_timestamp_response(ocsp) \
+            .set_ocsp_response(ocsp) \
+            .set_timestamp_response(ocsp) \
             .dump()
     """
     SIGNATURE_TEMPLATE = os.path.join(os.path.dirname(__file__), 'templates', 'signature.xml')
@@ -63,15 +63,24 @@ class XmlSignature(object):
         'sha256': 'http://www.w3.org/2001/04/xmlenc#sha256',
     }
 
+    # https://www.w3.org/TR/xmldsig-core1/#sec-AlgID
+    SIGNATURE_ALGO_ID_TEMPLATE = 'http://www.w3.org/2001/04/xmldsig-more#{algo}'
+    SIGNATURE_ALGORITHMS = [
+        'rsa-sha256',  # the default one, is embedded in the XML template.
+        'ecdsa-sha256',
+        'rsa-sha384',
+        'ecdsa-sha384',
+        'rsa-sha512',
+        'ecdsa-sha512',
+    ]
+
     SIGNED_PROPERTIES_TYPE = (
         # Standards are ambiguous about this:
         'http://uri.etsi.org/01903#SignedProperties',  # BDOC 2.1.2 mandates this
         'http://uri.etsi.org/01903/v1.1.1#SignedProperties',  # and this is as per https://www.w3.org/TR/XAdES/
     )
 
-    NEW_SIGNATURE_ID = u'S1'  # This is arbitrary but used a few times in the XAdES structure.
-    ROOT_CA_CERT = 'EE_Certification_Centre_Root_CA.pem'
-    TEST_ROOT_CA_CERT = 'TEST_of_EE_Certification_Centre_Root_CA.pem'
+    NEW_SIGNATURE_ID = 'S1'  # This is arbitrary but used a few times in the XAdES structure.
 
     def __init__(self, xml_or_binary_data):
         if isinstance(xml_or_binary_data, (etree._Element, etree._ElementTree)):
@@ -117,11 +126,14 @@ class XmlSignature(object):
             return None
         return base64.b64decode(cert_node.text)
 
+    def get_certificate_issuer_common_name(self):
+        subject_cert = self.get_certificate()
+        return subject_cert.asn1.issuer.native['common_name']
+
     def set_certificate(self, subject_cert: Union[bytes, Certificate]):
         """Set the certificate that would be used for signing
 
         :param subject_cert: bytes, file name (Python 3.4+), asn1crypto.x509.Certificate objects
-        :return:
         """
         if not isinstance(subject_cert, Certificate):
             subject_cert = load_certificate(subject_cert)
@@ -234,40 +246,76 @@ class XmlSignature(object):
         return self.canonicalize(sign_info_node)
 
     def digest(self):
-        return hashlib.sha256(self.signed_data()).digest()
+        signature_algo = self.get_signature_algorithm()
+        hash_algo_name = signature_algo.split('-')[-1]
+        hash_algo = getattr(hashlib, hash_algo_name)
+        return hash_algo(self.signed_data()).digest()
 
     def get_signature_value(self):
         sig_value_node = self._get_node('ds:SignatureValue')
         return base64.b64decode(sig_value_node.text)
 
-    def add_signature_value(self, signature):
+    def set_signature_value(self, signature: bytes):
         """Insert the base64-encoded value of a signature obtained from a signing service or device
 
         NOTE: the signature method should be known in advance, as it's part of the SignedInfo structure over which
           the signature is calculated.
 
         :param signature: Binary signature
-        :return:
         """
         sig_value_node = self._get_node('ds:SignatureValue')
         sig_value_node.text = base64.b64encode(signature)
         return self
 
-    def add_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
+    def get_signature_algorithm(self) -> str:
+        """
+        Returns the #hash part of the corresponding node, in form of 'rsa-sha256'
+
+        This algorithm is expected to be present in SIGNATURE_ALGORITHMS and be in form of
+        {CRYPTOMETHOD}-{DIGESTMETHOD}. See the note for `set_signature_algorithm` below.
+        """
+        sig_method_node = self._get_node('ds:SignatureMethod')
+        return sig_method_node.attrib['Algorithm'].split('#')[-1]
+
+    def set_signature_algorithm(self, algo: str = None):
+        """Set a signature algorithm, if it is not the default one (rsa-sha256).
+
+        NOTE: Since the algorithm is included in the signed data, it is not possible to change the algo
+        after signing.
+
+        Ultimately, if an external signing service MAY select different algos at its discretion,
+        this field should be ignored.
+
+        FWIW the verification method of this class only takes into account
+        the hash algo (DIGESTMETHOD) part of this attribute.
+
+        :param algo: signature algorithm, one of SIGNATURE_ALGORITHMS
+        """
+        if algo:
+            algo = algo.lower()
+            if algo not in self.SIGNATURE_ALGORITHMS:
+                raise ValueError("Unsupported signature algorithm")
+        else:
+            algo = self.SIGNATURE_ALGORITHMS[0]
+        sig_method_node = self._get_node('ds:SignatureMethod')
+        sig_method_node.attrib['Algorithm'] = self.SIGNATURE_ALGO_ID_TEMPLATE.format(algo=algo)
+        return self
+
+    def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
         """Add a root CA cert
 
         :param root_cert: can be a PEM-encoded bytes content, or an `oscrypto.Certificate` object
         """
         certs_node = self._get_node('xades:CertificateValues')
         ca_node = etree.Element('{%s}EncapsulatedX509Certificate' % self.NAMESPACES['xades'])
-        ca_node.attrib['Id'] = (u'%s-ROOT-CA-CERT' % self.NEW_SIGNATURE_ID).encode('ascii')
+        ca_node.attrib['Id'] = '%s-ROOT-CA-CERT' % self.NEW_SIGNATURE_ID
         if not isinstance(root_cert, Certificate):
             root_cert = load_certificate(root_cert)
         ca_node.text = base64.b64encode(root_cert.asn1.dump())
         certs_node.append(ca_node)
         return self
 
-    def add_ocsp_response(self, ocsp_response, embed_ocsp_certificate=False):
+    def set_ocsp_response(self, ocsp_response, embed_ocsp_certificate=False):
         """
         Embed the OCSP response and certificates
 
@@ -304,7 +352,7 @@ class XmlSignature(object):
         method = self.get_c14n_method('xades:SignatureTimeStamp')
         return self.canonicalize(sig_value_node, method)
 
-    def add_timestamp_response(self, tsr):
+    def set_timestamp_response(self, tsr):
         ts_value_node = self._get_node('xades:EncapsulatedTimeStamp')
         ts_value_node.text = base64.b64encode(tsr.dump())
         return self
@@ -318,7 +366,7 @@ class XmlSignature(object):
         return b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(self.xml)
 
     def verify(self):
-        hash_algo = 'sha256'  # TODO get from where it's appropriate
+        hash_algo = self.get_signature_algorithm().split('-')[-1]
         cert = self.get_certificate_value()
         signature = self.get_signature_value()
         signed_data = self.signed_data()
@@ -329,9 +377,6 @@ class XmlSignature(object):
         """Get a c14n method used within a specific context given by `parent_node`
 
         The default context is the SignedInfo node. Also encountered in SignatureTimestamp
-
-        :param parent_node:
-        :return:
         """
         method_node = self._get_node('{}/ds:CanonicalizationMethod'.format(parent_node))
         if method_node is not None:
@@ -350,5 +395,5 @@ class XmlSignature(object):
         exclusive = 'xml-exc-c14n' in method
         return etree.tostring(node, method='c14n', exclusive=exclusive)
 
-    def _get_node(self, tag_name):
+    def _get_node(self, tag_name) -> etree.Element:
         return self.xml.find('.//{}'.format(tag_name), namespaces=self.NAMESPACES)

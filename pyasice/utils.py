@@ -24,13 +24,13 @@ def prepare_signature(user_certificate: bytes, root_certificate: bytes, containe
         xml_sig.add_document(file_name, content, mime_type)
 
     xml_sig.set_certificate(user_certificate) \
-        .add_root_ca_cert(root_certificate) \
+        .set_root_ca_cert(root_certificate) \
         .update_signed_info()
 
     return xml_sig
 
 
-def finalize_signature(xml_signature, lt_ts=False):
+def finalize_signature(xml_signature: XmlSignature, lt_ts=False):
     """Finalize the XAdES signature in accordance with LT-TM profile, or LT-TS profile if `lt_ts` is True
 
     :param XmlSignature xml_signature:
@@ -45,12 +45,12 @@ def finalize_signature(xml_signature, lt_ts=False):
     ocsp.validate(subject_cert, issuer_cert, xml_signature.get_signature_value())
 
     # Embed the OCSP response
-    xml_signature.add_ocsp_response(ocsp)
+    xml_signature.set_ocsp_response(ocsp)
 
     if lt_ts:
         # Get a signature TimeStamp
         tsa = TSA(url=TSA.DEMO_URL if is_demo else None)
         tsr = tsa.get_timestamp(xml_signature.get_timestamp_response())
-        xml_signature.add_timestamp_response(tsr)
+        xml_signature.set_timestamp_response(tsr)
     else:
         xml_signature.remove_timestamp_node()

@@ -34,7 +34,7 @@ def x962_to_der(signature: bytes):
     return ECDSASignature({"r": r_prime, "s": s_prime}).dump()
 
 
-def verify_cryptography(certificate, signature, data, hash_algo='SHA256', prehashed=False):
+def verify(certificate, signature, data, hash_algo='SHA256', prehashed=False):
     """Verify RSA and EC signatures with the cryptography library
 
     :param Union[bytes, Certificate] certificate:
@@ -85,6 +85,3 @@ def verify_cryptography(certificate, signature, data, hash_algo='SHA256', prehas
             )
     except InvalidSignature:
         raise SignatureVerificationError()
-
-
-verify = verify_cryptography

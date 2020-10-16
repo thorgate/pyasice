@@ -7,8 +7,13 @@ import pytest
 from lxml import etree
 from unittest.mock import patch
 from oscrypto.asymmetric import Certificate, load_certificate
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, padding
+from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.x509 import Certificate as X509Certificate
 
-from .. import xmlsig
+from .conftest import generate_xml_signature
+from .. import xmlsig, verify
 from ..xmlsig import XmlSignature
 
 
@@ -59,13 +64,13 @@ def test_xmlsig_signing_time():
     assert xml_signature.get_signed_time() == '2000-01-01T00:00:00Z'
 
 
-def test_xmlsig_certificate(certificate_rsa_file):
+def test_xmlsig_certificate(certificate_rsa):
     xml_signature = XmlSignature.create()
 
     assert xml_signature.get_certificate_value() is None
     assert xml_signature.get_certificate() is None
 
-    cert = load_certificate(certificate_rsa_file)
+    cert = load_certificate(certificate_rsa.public_bytes(Encoding.DER))
 
     xml_signature.set_certificate(cert)
 
@@ -94,3 +99,42 @@ def test_xmlsig_documents():
     assert xml_signature._get_node('ds:Reference[@Id="r-id-2"]/ds:DigestValue').text == digest
     assert xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-2"]'
                                    '/xades:MimeType').text == 'application/pdf'
+
+
+@pytest.mark.parametrize('signature_algo', [None, 'rsa-sha512', 'ecdsa-sha256', 'ecdsa-sha512'])
+def test_xmlsig_sign_rsa(certificate_rsa, private_key_rsa, signature_algo):
+    xml_signature = generate_xml_signature(certificate_rsa, signature_algo)
+    signed_data = xml_signature.signed_data()
+
+    if signature_algo is None:
+        signature_algo = XmlSignature.SIGNATURE_ALGORITHMS[0]
+    hash_algo = signature_algo.split('-')[1]
+
+    signature = private_key_rsa.sign(
+        signed_data,
+        padding.PKCS1v15(),
+        getattr(hashes, hash_algo.upper())()
+    )
+
+    xml_signature.set_signature_value(signature)
+
+    xml_signature.verify()
+    assert "No exception was raised by the previous call"
+
+
+@pytest.mark.parametrize('signature_algo', [None, 'rsa-sha512', 'ecdsa-sha256', 'ecdsa-sha512'])
+def test_xmlsig_sign_ec(certificate_ec, private_key_ec, signature_algo):
+    xml_signature = generate_xml_signature(certificate_ec, signature_algo)
+
+    signed_data = xml_signature.signed_data()
+
+    if signature_algo is None:
+        signature_algo = XmlSignature.SIGNATURE_ALGORITHMS[0]
+    hash_algo = signature_algo.split('-')[1]
+
+    signature = private_key_ec.sign(signed_data, ec.ECDSA(getattr(hashes, hash_algo.upper())()))
+
+    xml_signature.set_signature_value(signature)
+
+    xml_signature.verify()
+    assert "No exception was raised by the previous call"

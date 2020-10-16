@@ -91,7 +91,6 @@ class OCSP(object):
         if ocsp_status != 'successful':
             raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
 
-        self.ocsp_request = ocsp_request
         self.ocsp_response = ocsp_response
         return ocsp_response
 

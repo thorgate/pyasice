@@ -1,23 +1,14 @@
-import os
-from unittest.mock import patch
+from datetime import datetime, timedelta
 
 import pytest
+from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.x509 import load_pem_x509_certificate
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
+from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.x509 import Certificate, NameOID
 
-p = os.path
-CERTS_PATH = p.abspath(p.join(p.dirname(__file__), 'certificates'))
-
-
-@pytest.fixture()
-def certificate_ecdsa_file():
-    return p.join(CERTS_PATH, 'ecdsa.pem')
-
-
-@pytest.fixture()
-def certificate_rsa_file():
-    return p.join(CERTS_PATH, 'rsa.pem')
+from pyasice import XmlSignature
 
 
 @pytest.fixture()
@@ -42,28 +33,68 @@ def private_key_rsa():
     )
 
 
-@pytest.fixture()
-def certificate_ec(certificate_ecdsa_file, private_key_ec):
+def _cert_builder(private_key):
     """
-    Can also build a real certificate:
     https://cryptography.io/en/latest/x509/reference/#x-509-certificate-builder
     """
-    with open(certificate_ecdsa_file, 'rb') as f:
-        cert_pem = f.read()
-    cert = load_pem_x509_certificate(cert_pem, default_backend())
-
-    with patch.object(cert, 'public_key') as fake_public_key:
-        fake_public_key.return_value = private_key_ec.public_key()
-        yield cert
+    public_key = private_key.public_key()
+    builder = x509.CertificateBuilder()
+    builder = builder.subject_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, u'cryptography.io'),
+    ]))
+    builder = builder.issuer_name(x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, u'cryptography.io'),
+    ]))
+    builder = builder.not_valid_before(datetime.today())
+    builder = builder.not_valid_after(datetime.today() + timedelta(days=5))
+    builder = builder.serial_number(x509.random_serial_number())
+    builder = builder.public_key(public_key)
+    builder = builder.add_extension(
+        x509.SubjectAlternativeName(
+            [x509.DNSName(u'cryptography.io')]
+        ),
+        critical=False
+    )
+    builder = builder.add_extension(
+        x509.BasicConstraints(ca=False, path_length=None), critical=True,
+    )
+    certificate = builder.sign(
+        private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
+    )
+    return certificate
 
 
 @pytest.fixture()
-def certificate_rsa(certificate_rsa_file, private_key_rsa):
-    with open(certificate_rsa_file, 'rb') as f:
-        cert_pem = f.read()
-    cert = load_pem_x509_certificate(cert_pem, default_backend())
+def certificate_ec(private_key_ec) -> Certificate:
+    return _cert_builder(private_key_ec)
 
-    with patch.object(cert, 'public_key') as fake_public_key:
-        fake_public_key.return_value = private_key_rsa.public_key()
-        yield cert
 
+@pytest.fixture()
+def certificate_rsa(private_key_rsa) -> Certificate:
+    return _cert_builder(private_key_rsa)
+
+
+def generate_xml_signature(certificate: Certificate, signature_algo=None):
+    s = XmlSignature.create()
+    s \
+        .set_signature_algorithm(signature_algo) \
+        .add_document('test.txt', b'test', 'text/plain') \
+        .set_certificate(certificate.public_bytes(Encoding.DER)) \
+        .update_signed_info()
+
+    return s
+
+
+@pytest.fixture()
+def xml_signature_rsa_signed(certificate_rsa, private_key_rsa):
+    s = generate_xml_signature(certificate_rsa)
+    signed_data = s.signed_data()
+
+    signature = private_key_rsa.sign(
+        signed_data,
+        padding.PKCS1v15(),
+        hashes.SHA256()
+    )
+
+    s.set_signature_value(signature)
+    return s

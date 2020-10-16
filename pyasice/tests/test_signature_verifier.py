@@ -4,7 +4,7 @@ import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding
 
-from ..signature_verifier import verify_cryptography, ECDSASignature
+from ..signature_verifier import verify, ECDSASignature
 
 
 def der_to_x962(signature):
@@ -35,7 +35,7 @@ def test_verify_data_ec(private_key_ec, certificate_ec, signed_data, x962):
     if x962:
         signature = der_to_x962(signature)
 
-    verify_cryptography(certificate_ec, signature, signed_data)
+    verify(certificate_ec, signature, signed_data)
     assert "No exception was raised by the previous call"
 
 
@@ -52,7 +52,7 @@ def test_verify_hash_ec(private_key_ec, certificate_ec, signed_data, x962):
     if x962:
         signature = der_to_x962(signature)
 
-    verify_cryptography(certificate_ec, signature, prehash, prehashed=True)
+    verify(certificate_ec, signature, prehash, prehashed=True)
     assert "No exception was raised by the previous call"
 
 
@@ -65,5 +65,5 @@ def test_verify_data_rsa(private_key_rsa, certificate_rsa, signed_data):
 
     private_key_rsa.public_key().verify(signature, signed_data, padding.PKCS1v15(), hashes.SHA256())
 
-    verify_cryptography(certificate_rsa, signature, signed_data)
+    verify(certificate_rsa, signature, signed_data)
     assert "No exception was raised by the previous call"

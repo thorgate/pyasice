@@ -17,7 +17,7 @@
                 <ds:DigestValue><!--Base64-encoded SIGNED_PROPERTIES_HASH, calculated over c14n-ized SignedSignatureProperties --></ds:DigestValue>
             </ds:Reference>
         </ds:SignedInfo>
-        <ds:SignatureValue Id="SIG-{SIGNATURE_ID}"><!-- Base64-encoded SIGNATURE_VALUE, gotten from SmartID service --></ds:SignatureValue>
+        <ds:SignatureValue Id="SIG-{SIGNATURE_ID}"><!-- Base64-encoded SIGNATURE_VALUE, gotten externally --></ds:SignatureValue>
         <ds:KeyInfo>
             <ds:X509Data>
                 <ds:X509Certificate><!-- Base64-encoded Cert --></ds:X509Certificate>
