@@ -282,7 +282,14 @@ To deal with it, we're using the `asn1crypto` library.
 The OCSP request should be made immediately after signing, and the base64-encoded response is embedded in the XAdES signature as a `xades:UnsignedSignatureProperties` descendant node,
 namely `xades:EncapsulatedOCSPValue`.
 
+#### Estonian eID
+
+URLs for OCSP services:
+* Demo: `http://demo.sk.ee/ocsp`
+* Production: `http://ocsp.sk.ee/`
+
 More detail on the [sk.ee OCSP page](https://www.sk.ee/en/services/validity-confirmation-services/technical-information/)
+
 
 ### Timestamping service
 
@@ -292,11 +299,16 @@ Also handled with the help of the `asn1crypto` library.
 The TSA request should be made immediately after OCSP validity confirmation, and the base64-encoded response is embedded in the XAdES signature as a `xades:UnsignedSignatureProperties` descendant node,
 namely `xades:EncapsulatedTimeStamp`.
 
+#### Estonian eID
+
+URLs for timestamping services:
+* Demo: `http://demo.sk.ee/tsa/`
+* Production: `http://tsa.sk.ee`
+
 More detail on the [sk.ee TSA page](https://www.sk.ee/en/services/time-stamping-service/)
 
 
 ## ASiC-E/BDOC Container File Manipulation
-
 
 Create a new container:
 ```python

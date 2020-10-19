@@ -1,12 +1,15 @@
 import hashlib
+from typing import Optional, List
 
 import requests
 from asn1crypto.algos import DigestInfo
 from asn1crypto.core import Boolean, OctetString
+from asn1crypto import ocsp
 from asn1crypto.ocsp import OCSPRequest, OCSPResponse, TBSRequest, TBSRequestExtension, TBSRequestExtensionId
 from asn1crypto.x509 import Certificate
 from oscrypto import asymmetric
 
+from .signature_verifier import verify
 from .exceptions import PyAsiceError
 
 
@@ -35,7 +38,7 @@ class OCSP(object):
 
     Perform certificate validation:
 
-        ocsp = OCSP()
+        ocsp = OCSP(ocsp_service_url)
         ocsp.validate(subject_cert, issuer_cert, signature)
 
     Check an arbitrary response:
@@ -43,16 +46,13 @@ class OCSP(object):
         ocsp = OCSP.load(der_encoded_binary_data)
     """
 
-    DEMO_URL = "http://demo.sk.ee/ocsp"
-    PROD_URL = "http://ocsp.sk.ee/"
-
     REQUEST_CONTENT_TYPE = "application/ocsp-request"
     RESPONSE_CONTENT_TYPE = "application/ocsp-response"
 
     def __init__(self, url=None):
         """"""
-        self.url = self.PROD_URL if url is None else url
-        self.ocsp_response = None
+        self.url = url
+        self.ocsp_response: Optional[OCSPResponse] = None
 
     def validate(self, subject_cert, issuer_cert, signature):
         """
@@ -86,12 +86,10 @@ class OCSP(object):
         assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
 
         ocsp_response = OCSPResponse.load(response.content)
-        ocsp_status = ocsp_response["response_status"].native
-        if ocsp_status != "successful":
-            raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
+        self.verify_response(ocsp_response)
 
         self.ocsp_response = ocsp_response
-        return ocsp_response
+        return self
 
     def get_responder_certs(self):
         """Get OCSP responder certificates embedded in the response
@@ -103,6 +101,45 @@ class OCSP(object):
     def get_encapsulated_response(self):
         """Get a DER-encoded OCSP response"""
         return self.ocsp_response.dump()
+
+    def verify(self):
+        self.verify_response(self.ocsp_response)
+
+    @staticmethod
+    def verify_response(ocsp_response: OCSPResponse):
+        """
+        Verify the OCSP response signature.
+
+        Ideally this should also verify the signer certificate, as does openssl with:
+
+            openssl ocsp -respin ocsp.der
+        """
+        ocsp_status = ocsp_response["response_status"].native
+        if ocsp_status != "successful":
+            raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
+
+        basic_response: ocsp.BasicOCSPResponse = ocsp_response.basic_ocsp_response
+
+        # Signer's certificate
+        certs = basic_response['certs']
+        cert: Certificate = certs[0]
+        cert_bytes = cert.dump()
+
+        # the signed data, as ASN.1-encoded structure
+        tbs_response: ocsp.ResponseData = ocsp_response.response_data
+        tbs_bytes = tbs_response.dump()
+
+        # the signature, as ASN.1-encoded structure
+        signature: ocsp.OctetBitString = basic_response['signature']
+
+        # the signature algorithm, in form of "{HASH_ALGO}_{CRYPTO_ALGO}"
+        # as per https://tools.ietf.org/html/rfc6960#section-4.3,
+        # clients should support sha256_rsa and sha1_rsa, as well as sha1_dsa but that's unlikely to be used.
+        signature_algorithm = basic_response['signature_algorithm']['algorithm'].native
+        if signature_algorithm not in ['sha256_rsa', 'sha1_rsa']:
+            raise ValueError("Unsupported signature algorithm")
+
+        verify(cert_bytes, signature.native, tbs_bytes, hash_algo=signature_algorithm.split('_')[0])
 
     @classmethod
     def load(cls, binary_data):
@@ -154,17 +191,14 @@ class OCSP(object):
 
     @classmethod
     def build_tbs_request(
-        cls, subject_cert, issuer_cert, tbs_request_extensions=None, request_extensions=None, _key_hash_algo="sha1"
+            cls,
+            subject_cert: Certificate,
+            issuer_cert: Certificate,
+            tbs_request_extensions: Optional[List[TBSRequestExtension]] = None,
+            request_extensions: Optional[list] = None,
+            _key_hash_algo="sha1"
     ):
-        """Build a TBSRequest entry for OCSPRequest
-
-        :param asn1crypto.x509.Certificate subject_cert:
-        :param asn1crypto.x509.Certificate issuer_cert:
-        :param Optional[list] tbs_request_extensions:
-        :param Optional[list] request_extensions:
-        :param string _key_hash_algo:
-        :return:
-        """
+        """Build a TBSRequest entry for OCSPRequest"""
         return TBSRequest(
             {
                 "request_list": [

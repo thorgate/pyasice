@@ -13,7 +13,7 @@ from oscrypto.asymmetric import Certificate, load_certificate
 
 from .ocsp import OCSP
 from .signature_verifier import verify
-
+from .tsa import TSA
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +348,7 @@ class XmlSignature:
         certs_node.append(ca_node)
         return self
 
-    def set_ocsp_response(self, ocsp_response, embed_ocsp_certificate=False):
+    def set_ocsp_response(self, ocsp_response: OCSP, embed_ocsp_certificate=False):
         """
         Embed the OCSP response and certificates
 
@@ -376,14 +376,36 @@ class XmlSignature:
 
         return self
 
-    def get_ocsp_response(self):
+    def get_ocsp_response(self) -> OCSP:
         ocsp_response_node = self._get_node("xades:EncapsulatedOCSPValue")
+        if not ocsp_response_node.text:
+            raise ValueError("The signature has no embedded OCSP response value")
         return OCSP.load(base64.b64decode(ocsp_response_node.text))
 
-    def get_timestamp_response(self):
+    def verify_ocsp_response(self):
+        """Verify embedded OCSP response.
+
+        :raises exceptions.SignatureVerificationError:
+        """
+        self.get_ocsp_response().verify()
+
+    def verify_ts_response(self):
+        """Verify embedded TSA response.
+
+        :raises exceptions.SignatureVerificationError:
+        """
+        TSA.verify(self.get_timestamp_response())
+
+    def get_timestamped_message(self):
         sig_value_node = self._get_node("ds:SignatureValue")
         method = self.get_c14n_method("xades:SignatureTimeStamp")
         return self.canonicalize(sig_value_node, method)
+
+    def get_timestamp_response(self):
+        ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
+        if not ts_value_node.text:
+            return None
+        return base64.b64decode(ts_value_node.text)
 
     def set_timestamp_response(self, tsr):
         ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
