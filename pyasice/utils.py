@@ -31,6 +31,8 @@ def finalize_signature(xml_signature: XmlSignature, lt_ts=False, *, ocsp_url, ts
 
     :param XmlSignature xml_signature:
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
+    :param ocsp_url:
+    :param tsa_url:
     """
     subject_cert = xml_signature.get_certificate()
     issuer_cert = xml_signature.get_root_ca_cert()

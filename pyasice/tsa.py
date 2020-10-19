@@ -35,10 +35,7 @@ class TSA:
         request = TimeStampReq(
             {
                 "version": "v1",
-                "message_imprint": {
-                    "hash_algorithm": {"algorithm": "sha256"},
-                    "hashed_message": hashlib.sha256(message).digest(),
-                },
+                "message_imprint": self.build_message_imprint(message),
                 "cert_req": True,  # Need the TSA cert in the response for validation
             }
         )
@@ -68,63 +65,76 @@ class TSA:
         return ts_response["time_stamp_token"]
 
     @classmethod
-    def verify(cls, ts_response: bytes):
+    def verify(cls, ts_response: bytes, original_message: bytes):
         """
         Verify that the signature in the response is valid.
 
         https://tools.ietf.org/html/rfc5652#section-5.4
         """
         try:
+            # any error during data structure parsing means the TS response is not valid
             ts_response = ContentInfo.load(ts_response)
-            content = ts_response['content']
+            if ts_response["content_type"].native != "signed-data":
+                raise ValueError("The TS response has invalid content type")
 
-            # the encapsulated TS message ("econtent")
-            econtent = content['encap_content_info']['content'].contents
-            digest_algo = content['digest_algorithms'][0]['algorithm'].native
-            econtent_digest = getattr(hashlib, digest_algo)(econtent).digest()
+            content = ts_response["content"]
 
-            signer_info = content['signer_infos'][0]
+            # Get the encapsulated TS message ("econtent")
+            econtent = content["encap_content_info"]["content"]
 
-            # if signed_attrs are absent, the signed data is a hash of the econtent itself
-            try:
-                # asn1 primitive types have no `.get()` method
-                signed_attrs = signer_info['signed_attrs']
-            except KeyError:
-                signed_attrs = None
+            # verify that the response refers to the original message
 
-            if signed_attrs is not None:
-                # Verify that "econtent" hash matches the message_digest attribute of signed_attrs
+            message_imprint = econtent.native["message_imprint"]
+            original_imprint = cls.build_message_imprint(original_message)
+            if (
+                message_imprint["hash_algorithm"]["algorithm"] != original_imprint["hash_algorithm"]["algorithm"]
+                or message_imprint["hashed_message"] != original_imprint["hashed_message"]
+            ):
+                raise ValueError("The timestamped message is not the original one")
 
-                # get the hash
-                md = [a for a in signed_attrs.native if a['type'] == 'message_digest'][0]
-                the_hash = md['values'][0]
-                if econtent_digest != the_hash:
-                    raise ValueError("Message digests do not match")
+            # Verify that "econtent" hash matches the message_digest attribute of signed_attrs
 
-                # Do the magic described in the RFC 5652 (the link in docstring) as:
-                #    the DER encoding of the EXPLICIT SET OF tag, rather than of the IMPLICIT [0]
-                #    tag, MUST be included in the message digest calculation
-                # i.e. replace the current (class, tag) pair with those of the SET-OF type
-                signed_attrs.implicit = False
-                signed_attrs.class_ = SetOf.class_
-                signed_attrs.tag = SetOf.tag
-                signed_data = signed_attrs.dump(True)
+            digest_algo = content["digest_algorithms"][0]["algorithm"].native
+            econtent_digest = getattr(hashlib, digest_algo)(econtent.contents).digest()
 
-            else:
-                signed_data = econtent_digest
+            signer_info = content["signer_infos"][0]
+
+            signed_attrs = signer_info["signed_attrs"]
+
+            md = [a for a in signed_attrs.native if a["type"] == "message_digest"][0]
+            the_hash = md["values"][0]
+            if econtent_digest != the_hash:
+                raise ValueError("Message digests do not match")
 
             # Verify the signature with the included cert
-            cert = content['certificates'][0].chosen
 
-            signature = signer_info['signature']
+            # To get signed data, we need some magic, as quoted from the RFC 5652 (the link in docstring):
+            #    the DER encoding of the EXPLICIT SET OF tag, rather than of the IMPLICIT [0]
+            #    tag, MUST be included in the message digest calculation
+            # i.e. replace the current (class, tag) pair of the struct with those of the SET-OF type
+            signed_attrs.implicit = False
+            signed_attrs.class_ = SetOf.class_
+            signed_attrs.tag = SetOf.tag
+            signed_data = signed_attrs.dump(True)
+
+            cert = content["certificates"][0].chosen
+
+            signature = signer_info["signature"]
             assert isinstance(signature, OctetString)
             signature_bytes = signature.native
 
-            sig_algo = signer_info['signature_algorithm']['algorithm'].native
-            sig_hash_algo = sig_algo.split('_')[0]
+            sig_algo = signer_info["signature_algorithm"]["algorithm"].native
+            sig_hash_algo = sig_algo.split("_")[0]
 
             verify(cert.dump(), signature_bytes, signed_data, sig_hash_algo)
 
         except Exception as e:
             raise TSAError("Invalid TSA response format") from e
         return ts_response
+
+    @staticmethod
+    def build_message_imprint(message):
+        return {
+            "hash_algorithm": {"algorithm": "sha256"},
+            "hashed_message": hashlib.sha256(message).digest(),
+        }

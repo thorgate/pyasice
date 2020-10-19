@@ -15,6 +15,7 @@ from .ocsp import OCSP
 from .signature_verifier import verify
 from .tsa import TSA
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -394,7 +395,7 @@ class XmlSignature:
 
         :raises exceptions.SignatureVerificationError:
         """
-        TSA.verify(self.get_timestamp_response())
+        TSA.verify(self.get_timestamp_response(), self.get_timestamped_message())
 
     def get_timestamped_message(self):
         sig_value_node = self._get_node("ds:SignatureValue")

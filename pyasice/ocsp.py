@@ -1,16 +1,16 @@
 import hashlib
-from typing import Optional, List
+from typing import List, Optional
 
 import requests
+from asn1crypto import ocsp
 from asn1crypto.algos import DigestInfo
 from asn1crypto.core import Boolean, OctetString
-from asn1crypto import ocsp
 from asn1crypto.ocsp import OCSPRequest, OCSPResponse, TBSRequest, TBSRequestExtension, TBSRequestExtensionId
 from asn1crypto.x509 import Certificate
 from oscrypto import asymmetric
 
-from .signature_verifier import verify
 from .exceptions import PyAsiceError
+from .signature_verifier import verify
 
 
 class SKHackedTBSRequestExtension(TBSRequestExtension):
@@ -121,7 +121,7 @@ class OCSP(object):
         basic_response: ocsp.BasicOCSPResponse = ocsp_response.basic_ocsp_response
 
         # Signer's certificate
-        certs = basic_response['certs']
+        certs = basic_response["certs"]
         cert: Certificate = certs[0]
         cert_bytes = cert.dump()
 
@@ -130,16 +130,16 @@ class OCSP(object):
         tbs_bytes = tbs_response.dump()
 
         # the signature, as ASN.1-encoded structure
-        signature: ocsp.OctetBitString = basic_response['signature']
+        signature: ocsp.OctetBitString = basic_response["signature"]
 
         # the signature algorithm, in form of "{HASH_ALGO}_{CRYPTO_ALGO}"
         # as per https://tools.ietf.org/html/rfc6960#section-4.3,
         # clients should support sha256_rsa and sha1_rsa, as well as sha1_dsa but that's unlikely to be used.
-        signature_algorithm = basic_response['signature_algorithm']['algorithm'].native
-        if signature_algorithm not in ['sha256_rsa', 'sha1_rsa']:
+        signature_algorithm = basic_response["signature_algorithm"]["algorithm"].native
+        if signature_algorithm not in ["sha256_rsa", "sha1_rsa"]:
             raise ValueError("Unsupported signature algorithm")
 
-        verify(cert_bytes, signature.native, tbs_bytes, hash_algo=signature_algorithm.split('_')[0])
+        verify(cert_bytes, signature.native, tbs_bytes, hash_algo=signature_algorithm.split("_")[0])
 
     @classmethod
     def load(cls, binary_data):
@@ -191,12 +191,12 @@ class OCSP(object):
 
     @classmethod
     def build_tbs_request(
-            cls,
-            subject_cert: Certificate,
-            issuer_cert: Certificate,
-            tbs_request_extensions: Optional[List[TBSRequestExtension]] = None,
-            request_extensions: Optional[list] = None,
-            _key_hash_algo="sha1"
+        cls,
+        subject_cert: Certificate,
+        issuer_cert: Certificate,
+        tbs_request_extensions: Optional[List[TBSRequestExtension]] = None,
+        request_extensions: Optional[list] = None,
+        _key_hash_algo="sha1",
     ):
         """Build a TBSRequest entry for OCSPRequest"""
         return TBSRequest(
