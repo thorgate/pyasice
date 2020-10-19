@@ -1,0 +1,27 @@
+language: python
+
+os: linux
+
+jobs:
+  include:
+    - python: 3.6
+    - python: 3.7
+    - python: 3.8
+    - python: 3.9
+
+script:
+  - make venv lint coverage
+
+deploy:
+  provider: pypi
+  # opt in to deployment v2 which allows using env vars for passwords
+  edge: true
+  username: __token__
+  distributions: sdist bdist_wheel
+  skip_existing: true
+  on:
+    tags: true
+    python: 3.6
+
+notifications:
+    email: false

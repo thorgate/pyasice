@@ -2,6 +2,11 @@ PROJECT := pyasice
 VENV := ./venv/bin
 
 .PHONY:
+venv:
+	python -m venv venv
+	$(VENV)/pip install -r requirements-dev.txt
+
+.PHONY:
 lint:
 	$(VENV)/black --check .
 	$(VENV)/isort --check-only --project=pyasice .
