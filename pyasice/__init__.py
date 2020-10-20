@@ -3,4 +3,4 @@ from .signature_verifier import verify  # noqa: F401
 from .xmlsig import XmlSignature  # noqa: F401
 
 
-__version__ = "1.0"
+__version__ = "1.0b0"

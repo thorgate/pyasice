@@ -13,7 +13,7 @@ readme = open("README.md").read()
 requirements = [line for line in open("requirements.txt").readlines() if line and not line.startswith("#")]
 
 setup(
-    name="esteid-certificates",
+    name="pyasice",
     version=version,
     description="""Manipulate ASiC-E containers and XAdES/eIDAS signatures for Estonian e-identity services""",
     long_description=readme,
@@ -29,7 +29,7 @@ setup(
     license="ISC",
     keywords="esteid asice xades smartid smart-id mobiilid mobile-id idcard",
     classifiers=[
-        "Development Status :: 5 - Production",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Natural Language :: English",

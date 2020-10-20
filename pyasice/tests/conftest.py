@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -9,7 +10,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import Certificate, NameOID
 
-from pyasice import XmlSignature
+from pyasice import Container, XmlSignature
+from pyasice.ocsp import OCSP
 
 
 @pytest.fixture()
@@ -88,3 +90,36 @@ def xml_signature_rsa_signed(certificate_rsa, private_key_rsa):
 
     s.set_signature_value(signature)
     return s
+
+
+# Use data from a real container signed via the Demo MobileID service with a test account
+
+
+@pytest.fixture()
+def signed_container_file():
+    """A real container signed via the Demo MobileID service with a test account"""
+    with open(Path(__file__).parent / "files" / "signed-test-mobileid-ee.asice", "rb") as f:
+        yield f
+
+
+@pytest.fixture()
+def signed_container(signed_container_file) -> Container:
+    return Container(signed_container_file)
+
+
+@pytest.fixture()
+def demo_xml_signature(signed_container) -> XmlSignature:
+    return next(signed_container.iter_signatures())
+
+
+@pytest.fixture()
+def demo_ocsp_response(demo_xml_signature) -> bytes:
+    ocsp_resp = demo_xml_signature.get_ocsp_response()
+    assert isinstance(ocsp_resp, OCSP)
+
+    return ocsp_resp.get_encapsulated_response()
+
+
+@pytest.fixture()
+def demo_ts_response(demo_xml_signature) -> bytes:
+    return demo_xml_signature.get_timestamp_response()

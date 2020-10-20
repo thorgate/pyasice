@@ -1,27 +1,28 @@
 PROJECT := pyasice
 VENV := ./venv/bin
+export PATH := $(VENV):$(PATH)
 
 .PHONY:
 venv:
 	python -m venv venv
-	$(VENV)/pip install -r requirements-dev.txt
+	pip install -r requirements-dev.txt
 
 .PHONY:
 lint:
-	$(VENV)/black --check .
-	$(VENV)/isort --check-only --project=pyasice .
-	$(VENV)/flake8
+	black --check .
+	isort --check-only --project=pyasice .
+	flake8
 
 .PHONY:
 fmt:
-	$(VENV)/black .
-	$(VENV)/isort --project=pyasice .
+	black .
+	isort --project=pyasice .
 
 .PHONY:
 test:
-	$(VENV)/pytest
+	pytest
 
 .PHONY:
 coverage:
-	$(VENV)/pytest --cov=$(PROJECT)
+	pytest --cov=$(PROJECT)
 	coverage html

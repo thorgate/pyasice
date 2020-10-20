@@ -1,12 +1,12 @@
 import hashlib
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 
 import requests
 from asn1crypto import ocsp
 from asn1crypto.algos import DigestInfo
 from asn1crypto.core import Boolean, OctetString
 from asn1crypto.ocsp import OCSPRequest, OCSPResponse, TBSRequest, TBSRequestExtension, TBSRequestExtensionId
-from asn1crypto.x509 import Certificate
+from asn1crypto.x509 import Certificate as ASN1Certificate
 from oscrypto import asymmetric
 
 from .exceptions import PyAsiceError
@@ -91,11 +91,8 @@ class OCSP(object):
         self.ocsp_response = ocsp_response
         return self
 
-    def get_responder_certs(self):
-        """Get OCSP responder certificates embedded in the response
-
-        :return: Tuple[asn1crypto.x509.Certificate]
-        """
+    def get_responder_certs(self) -> Tuple[ASN1Certificate]:
+        """Get OCSP responder certificates embedded in the response"""
         return tuple(self.ocsp_response.basic_ocsp_response["certs"])
 
     def get_encapsulated_response(self):
@@ -106,7 +103,7 @@ class OCSP(object):
         self.verify_response(self.ocsp_response)
 
     @staticmethod
-    def verify_response(ocsp_response: OCSPResponse):
+    def verify_response(ocsp_response: Union[OCSPResponse, bytes]):
         """
         Verify the OCSP response signature.
 
@@ -114,6 +111,9 @@ class OCSP(object):
 
             openssl ocsp -respin ocsp.der
         """
+        if not isinstance(ocsp_response, OCSPResponse):
+            ocsp_response = OCSPResponse.load(ocsp_response)
+
         ocsp_status = ocsp_response["response_status"].native
         if ocsp_status != "successful":
             raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
@@ -122,7 +122,7 @@ class OCSP(object):
 
         # Signer's certificate
         certs = basic_response["certs"]
-        cert: Certificate = certs[0]
+        cert: ASN1Certificate = certs[0]
         cert_bytes = cert.dump()
 
         # the signed data, as ASN.1-encoded structure
@@ -148,10 +148,15 @@ class OCSP(object):
         return me
 
     @classmethod
-    def build_ocsp_request(cls, subject_cert, issuer_cert, signature=None):
-        if not isinstance(issuer_cert, (Certificate, asymmetric.Certificate)):
+    def build_ocsp_request(
+        cls,
+        subject_cert: Union[asymmetric.Certificate, ASN1Certificate, bytes],
+        issuer_cert: Union[asymmetric.Certificate, ASN1Certificate, bytes],
+        signature=None,
+    ) -> OCSPRequest:
+        if not isinstance(issuer_cert, asymmetric.Certificate):
             issuer_cert = asymmetric.load_certificate(issuer_cert)
-        if not isinstance(subject_cert, (Certificate, asymmetric.Certificate)):
+        if not isinstance(subject_cert, asymmetric.Certificate):
             subject_cert = asymmetric.load_certificate(subject_cert)
 
         extensions = None
@@ -192,8 +197,8 @@ class OCSP(object):
     @classmethod
     def build_tbs_request(
         cls,
-        subject_cert: Certificate,
-        issuer_cert: Certificate,
+        subject_cert: ASN1Certificate,
+        issuer_cert: ASN1Certificate,
         tbs_request_extensions: Optional[List[TBSRequestExtension]] = None,
         request_extensions: Optional[list] = None,
         _key_hash_algo="sha1",
