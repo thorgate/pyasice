@@ -2,13 +2,16 @@
 
 The `pyasice` library is designed to:
 * create, read, and verify XAdES/XMLDsig/eIDAS electronic signatures,
-* validate signers' certificates,
+* validate signers' certificates with OCSP,
 * confirm these signatures with TimeStamping, 
 * create and manipulate [ASiC-E](https://en.wikipedia.org/wiki/Associated_Signature_Containers) or BDoc 2.1 containers, 
 which are based on the XAdES/eIDAS stack.  
 
 ## Contents
 
+* [Quickstart](#quickstart)
+* * [ASiC-E/BDOC Container File Manipulation](#asic-ebdoc-container-file-manipulation)
+* * [Signing Flow Utilities](#signing-flow-utilities)
 * [Normative References](#normative-references)
 * [Module Layout](#module-layout)
 * [Technology Stack](#technology-stack)
@@ -20,7 +23,75 @@ which are based on the XAdES/eIDAS stack.
 * [Secondary Services](#secondary-services)
 * * [OCSP](#ocsp)
 * * [Timestamping Service](#timestamping-service)
-* [ASiC-E/BDOC Container File Manipulation](#asic-ebdoc-container-file-manipulation)
+
+## Quickstart
+
+### ASiC-E/BDOC Container File Manipulation
+
+Create a new container:
+```python
+from pyasice import Container, XmlSignature
+
+xmlsig = XmlSignature.create().add_document('test.txt', b'Test data', 'application/pdf')
+# ... here goes the signing, confirming and timestamping part ... 
+
+container = Container()
+container\
+    .add_file('test.txt', b'Test data', 'application/pdf')\
+    .add_signature(xmlsig)\
+    .save('test.asice')
+```
+
+Use `Container(filename)` to open an existing container:
+```python
+from pyasice import Container, XmlSignature
+
+container = Container('test.asice')
+
+# Verify container
+container.verify_signatures()
+
+# Read files in the container
+with container.open_file('test.txt') as f:
+    assert f.read() == b'Test data'
+
+# Add signatures
+another_xmlsig = XmlSignature.create().add_document('name', b'content', 'mime/type')
+# ... here goes the signing, confirming and timestamping part ... 
+container.add_signature(another_xmlsig).save()
+```
+
+### Signing Flow Utilities
+
+```python
+from pyasice import Container, prepare_signature, finalize_signature
+
+# get this from the ID provider, e.g. sk.ee. Here we use the `esteid-certificates` PyPI package
+import esteid_certificates
+root_certificate = esteid_certificates.get_root_certificate()
+
+# get this from an external service, ID card, or elsewhere
+user_certificate = b'der encoded user certificate'
+
+container = Container()
+container.add_file("test.txt", b'Test', "text/plain")
+
+xml_sig = prepare_signature(user_certificate, root_certificate, container)
+
+# Use an external service, or ID card, or a private key from elsewhere
+# to sign the XML signature structure
+signature_value = externally.sign(xml_sig.signed_data())
+xml_sig.set_signature_value(signature_value)
+
+# Complete the XML signature with OCSP and optionally Timestamping
+finalize_signature(xml_sig, ocsp_url="https://ocsp.server.url", tsa_url="https://tsa.server.url")
+
+container.add_signature(xml_sig)
+
+with open("path/to/file.asice", "wb") as f:
+    f.write(container.finalize().getbuffer())
+```
+
 
 ## Normative References
 
@@ -306,39 +377,3 @@ URLs for timestamping services:
 * Production: `http://tsa.sk.ee`
 
 More detail on the [sk.ee TSA page](https://www.sk.ee/en/services/time-stamping-service/)
-
-
-## ASiC-E/BDOC Container File Manipulation
-
-Create a new container:
-```python
-from pyasice import Container, XmlSignature
-
-xmlsig = XmlSignature.create().add_document('test.txt', b'Test data', 'application/pdf')
-# ... here goes the signing, confirming and timestamping part ... 
-
-container = Container()
-container\
-    .add_file('test.txt', b'Test data', 'application/pdf')\
-    .add_signature(xmlsig)\
-    .save('test.asice')
-```
-
-Use `Container(filename)` to open an existing container:
-```python
-from pyasice import Container, XmlSignature
-
-container = Container('test.asice')
-
-# Verify container
-container.verify_signatures()
-
-# Read files in the container
-with container.open_file('test.txt') as f:
-    assert f.read() == b'Test data'
-
-# Add signatures
-another_xmlsig = XmlSignature.create().add_document('name', b'content', 'mime/type')
-# ... here goes the signing, confirming and timestamping part ... 
-container.add_signature(another_xmlsig).save()
-```

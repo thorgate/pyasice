@@ -125,10 +125,11 @@ class Container(object):
         if not self.data_file_names:
             raise ContainerFormatError(f"Can't save container '{self}' without data files")
 
-        self._write_manifest()
-
         with open(name, "wb") as f:
-            f.write(self.get_contents())
+            f.write(self.finalize().getbuffer())
+
+        self._zip_buffer.seek(0)
+        self._zip_file = ZipFile(self._zip_buffer, "a")
         return self
 
     def add_file(self, file_name: str, binary_data: bytes, mime_type="application/octet-stream", compress=True):
@@ -175,6 +176,7 @@ class Container(object):
                 yield file_name, f.read(), mime_type
 
     def open_file(self, file_name):
+        """Read a file contained in the container"""
         return self._zip_file.open(file_name)
 
     def add_signature(self, signature: XmlSignature):
