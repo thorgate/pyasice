@@ -26,14 +26,17 @@ def prepare_signature(user_certificate: bytes, root_certificate: bytes, containe
     return xml_sig
 
 
-def finalize_signature(xml_signature: XmlSignature, lt_ts=False, *, ocsp_url, tsa_url=None):
+def finalize_signature(xml_signature: XmlSignature, lt_ts=True, *, ocsp_url, tsa_url=None):
     """Finalize the XAdES signature in accordance with LT-TM profile, or LT-TS profile if `lt_ts` is True
 
     :param XmlSignature xml_signature:
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
     :param ocsp_url:
-    :param tsa_url:
+    :param tsa_url: required if lt_ts is True
     """
+    if lt_ts and not tsa_url:
+        raise ValueError("TSA URL can not be empty when LT-TS profile is selected, requires a TSA service query")
+
     subject_cert = xml_signature.get_certificate()
     issuer_cert = xml_signature.get_root_ca_cert()
 

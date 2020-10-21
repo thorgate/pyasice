@@ -32,13 +32,7 @@ class TSA:
         https://www.etsi.org/deliver/etsi_ts/101900_101999/101903/01.04.02_60/ts_101903v010402p.pdf
         section 7.3
         """
-        request = TimeStampReq(
-            {
-                "version": "v1",
-                "message_imprint": self.build_message_imprint(message),
-                "cert_req": True,  # Need the TSA cert in the response for validation
-            }
-        )
+        request = self.build_ts_request(message)
 
         try:
             response = requests.post(
@@ -138,3 +132,13 @@ class TSA:
             "hash_algorithm": {"algorithm": "sha256"},
             "hashed_message": hashlib.sha256(message).digest(),
         }
+
+    @classmethod
+    def build_ts_request(cls, message):
+        return TimeStampReq(
+            {
+                "version": "v1",
+                "message_imprint": cls.build_message_imprint(message),
+                "cert_req": True,  # Need the TSA cert in the response for validation
+            }
+        )

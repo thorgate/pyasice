@@ -377,10 +377,10 @@ class XmlSignature:
 
         return self
 
-    def get_ocsp_response(self) -> OCSP:
+    def get_ocsp_response(self) -> Optional[OCSP]:
         ocsp_response_node = self._get_node("xades:EncapsulatedOCSPValue")
-        if not ocsp_response_node.text:
-            raise ValueError("The signature has no embedded OCSP response value")
+        if not getattr(ocsp_response_node, 'text', None):
+            return None
         return OCSP.load(base64.b64decode(ocsp_response_node.text))
 
     def verify_ocsp_response(self):
@@ -402,9 +402,15 @@ class XmlSignature:
         method = self.get_c14n_method("xades:SignatureTimeStamp")
         return self.canonicalize(sig_value_node, method)
 
-    def get_timestamp_response(self):
+    def get_timestamp_response(self) -> Optional[bytes]:
+        """
+        Get the embedded TSA response for an LT-TS profile signature.
+
+        LT-TM must not even have the XML node.
+        """
         ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
-        if not ts_value_node.text:
+        ts_value = getattr(ts_value_node, "text", None)
+        if not ts_value:
             return None
         return base64.b64decode(ts_value_node.text)
 
@@ -414,6 +420,7 @@ class XmlSignature:
         return self
 
     def remove_timestamp_node(self):
+        """LT-TM profile requires the absence of the XML node"""
         ts_value_node = self._get_node("xades:SignatureTimeStamp")
         ts_value_node.getparent().remove(ts_value_node)
         return self
