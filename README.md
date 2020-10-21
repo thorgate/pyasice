@@ -64,7 +64,7 @@ container.add_signature(another_xmlsig).save()
 ### Signing Flow Utilities
 
 ```python
-from pyasice import Container, prepare_signature, finalize_signature
+from pyasice import Container, finalize_signature
 
 # get this from the ID provider, e.g. sk.ee. Here we use the `esteid-certificates` PyPI package
 import esteid_certificates
@@ -76,7 +76,7 @@ user_certificate = b'der encoded user certificate'
 container = Container()
 container.add_file("test.txt", b'Test', "text/plain")
 
-xml_sig = prepare_signature(user_certificate, root_certificate, container)
+xml_sig = container.prepare_signature(user_certificate)
 
 # Use an external service, or ID card, or a private key from elsewhere
 # to sign the XML signature structure
@@ -242,11 +242,15 @@ More details about the certificate in the [SigningCertificate](#SigningCertifica
  
 ### SignedProperties
 
-The XML section of `SignedProperties` consists of, at least :question:, the `SigningTime`, `SigningCertificate` and `SignaturePolicyIdentifer` elements.
+The XML section of `SignedProperties` consists of, [at least](https://www.w3.org/TR/XAdES/#IDAEAD1B), 
+the `SigningTime`, `SigningCertificate` and `SignaturePolicyIdentifer` elements.
+
+:question: The signatures returned by e.g. [Dokobit](https://dokobit.ee), 
+do not contain the `SignaturePolicyIdentifer` node.
 
 #### SigningTime
 
-Is a timestamp in ISO 8601 format.
+A timestamp in ISO 8601 format.
 
 #### SignaturePolicyIdentifier 
 
@@ -271,7 +275,8 @@ This appears to be a static^1 XML chunk referencing the BDOC 2.1 Specifications 
 </xades:SignaturePolicyIdentifier>
 ```
 
-[1] The DigestValue is the hash value of current document in base64 encoding. Refer to [BDOC 2.1:2014 Specification](https://www.id.ee/public/bdoc-spec212-eng.pdf) for more information.
+[1] The DigestValue is the hash value of the document referenced by `SPURI`, encoded in base64. 
+Refer to [BDOC 2.1:2014 Specification](https://www.id.ee/public/bdoc-spec212-eng.pdf) for more information.
 
 #### SigningCertificate
 

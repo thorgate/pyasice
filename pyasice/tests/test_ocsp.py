@@ -43,8 +43,8 @@ def test_ocsp_existing_response(demo_ocsp_response):
     assert len(certs) > 0
     assert isinstance(certs[0], ASN1Certificate)
 
-    assert certs[0].subject.native["common_name"] == "SK OCSP RESPONDER 2011"
-    assert certs[0].issuer.native["common_name"] == "EE Certification Centre Root CA"
+    assert certs[0].subject.native["common_name"] == "TEST of SK OCSP RESPONDER 2011"
+    assert certs[0].issuer.native["common_name"] == "TEST of EE Certification Centre Root CA"
 
     OCSP.verify_response(ocsp_resp.get_encapsulated_response())
     ocsp_resp.verify()

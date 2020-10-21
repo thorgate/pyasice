@@ -5,8 +5,9 @@ from typing import BinaryIO, Optional, Union
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from lxml import etree
+from oscrypto.asymmetric import Certificate
 
-from .exceptions import ContainerFormatError
+from .exceptions import ContainerFormatError, NoFilesToSign
 from .xmlsig import XmlSignature
 
 
@@ -35,7 +36,9 @@ class Container(object):
     Spec: https://www.id.ee/public/bdoc-spec212-eng.pdf [1]
     """
 
-    FormatError = ContainerFormatError  # save an import for the class users
+    # save an `import ...` for users of the class
+    FormatError = ContainerFormatError
+    NoFilesToSign = NoFilesToSign
 
     META_DIR = "META-INF"
     # > The names of these files shall contain the string "signatures" [1], ch.8
@@ -99,6 +102,21 @@ class Container(object):
 
     def __str__(self):
         return self.name or repr(self)
+
+    def prepare_signature(self, signer_certificate: Union[bytes, Certificate]):
+        """Generates an XML signature structure for files in the container"""
+        if not self.has_data_files():
+            raise NoFilesToSign(f"Container `{self}` contains no files to sign")
+
+        # Generate a XAdES signature
+        xml_sig = XmlSignature.create()
+
+        for file_name, content, mime_type in self.iter_data_files():
+            xml_sig.add_document(file_name, content, mime_type)
+
+        xml_sig.set_certificate(signer_certificate).update_signed_info()
+
+        return xml_sig
 
     def finalize(self) -> io.BytesIO:
         """Finalizes the zip archive and returns the BytesIO buffer.

@@ -1,35 +1,14 @@
-from .container import Container
-from .exceptions import NoFilesToSign
+from .exceptions import PyAsiceError
 from .ocsp import OCSP
 from .tsa import TSA
 from .xmlsig import XmlSignature
 
 
-def prepare_signature(user_certificate: bytes, root_certificate: bytes, container: Container) -> XmlSignature:
-    """Generate the XAdES signature structure
-
-    :param user_certificate: the DER-encoded user certificate
-    :param root_certificate: the DER-encoded root certificate
-    :param container: The BDoc2 container to operate on
-    """
-    if not container.has_data_files():
-        raise NoFilesToSign(f"Container `{container}` contains no files to sign")
-
-    # Generate a XAdES signature
-    xml_sig = XmlSignature.create()
-
-    for file_name, content, mime_type in container.iter_data_files():
-        xml_sig.add_document(file_name, content, mime_type)
-
-    xml_sig.set_certificate(user_certificate).set_root_ca_cert(root_certificate).update_signed_info()
-
-    return xml_sig
-
-
-def finalize_signature(xml_signature: XmlSignature, lt_ts=True, *, ocsp_url, tsa_url=None):
+def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=True, *, ocsp_url, tsa_url=None):
     """Finalize the XAdES signature in accordance with LT-TM profile, or LT-TS profile if `lt_ts` is True
 
     :param XmlSignature xml_signature:
+    :param bytes issuer_cert:
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
     :param ocsp_url:
     :param tsa_url: required if lt_ts is True
@@ -37,12 +16,15 @@ def finalize_signature(xml_signature: XmlSignature, lt_ts=True, *, ocsp_url, tsa
     if lt_ts and not tsa_url:
         raise ValueError("TSA URL can not be empty when LT-TS profile is selected, requires a TSA service query")
 
+    signature_value = xml_signature.get_signature_value()
+    if not signature_value:
+        raise PyAsiceError("The XML signature has not been signed properly")
+
     subject_cert = xml_signature.get_certificate()
-    issuer_cert = xml_signature.get_root_ca_cert()
 
     # Get an OCSP status confirmation
     ocsp = OCSP(ocsp_url)
-    ocsp.validate(subject_cert, issuer_cert, xml_signature.get_signature_value())
+    ocsp.validate(subject_cert, issuer_cert, signature_value)
 
     # Embed the OCSP response
     xml_signature.set_ocsp_response(ocsp)

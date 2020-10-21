@@ -53,7 +53,10 @@ class TSA:
         assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
 
         ts_response = TimeStampResp.load(response.content)
-        assert ts_response["status"]["status_string"][0].native == "Operation Okay"
+        # see asn1crypto.tsp.PKIStatus
+        status = ts_response["status"]["status"].native
+        if status != "granted":
+            raise TSAError(f"Timestamping service denied the request with a status of {status}")
 
         self.ts_response = ts_response
         return ts_response["time_stamp_token"]
@@ -68,8 +71,11 @@ class TSA:
         try:
             # any error during data structure parsing means the TS response is not valid
             ts_response = ContentInfo.load(ts_response)
-            if ts_response["content_type"].native != "signed-data":
-                raise ValueError("The TS response has invalid content type")
+            ts_content_type = ts_response.native["content_type"]
+
+            # see asn1crypto.cms.ContentType
+            if ts_content_type != "signed_data":
+                raise ValueError(f"The TS response has invalid content type '{ts_content_type}'")
 
             content = ts_response["content"]
 
@@ -84,7 +90,7 @@ class TSA:
                 message_imprint["hash_algorithm"]["algorithm"] != original_imprint["hash_algorithm"]["algorithm"]
                 or message_imprint["hashed_message"] != original_imprint["hashed_message"]
             ):
-                raise ValueError("The timestamped message is not the original one")
+                raise ValueError("The timestamped message differs from the original one")
 
             # Verify that "econtent" hash matches the message_digest attribute of signed_attrs
 

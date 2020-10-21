@@ -13,7 +13,7 @@ from oscrypto.asymmetric import Certificate, load_certificate
 
 from .. import verify, xmlsig
 from ..xmlsig import XmlSignature
-from .conftest import cert_builder, generate_xml_signature
+from .conftest import generate_xml_signature
 
 
 def test_xmlsig_create():
@@ -55,12 +55,12 @@ def test_xmlsig_load_error():
 def test_xmlsig_signing_time():
     xml_signature = XmlSignature.create()
 
-    assert xml_signature.get_signed_time() == "{SIGNATURE_TIMESTAMP}"
+    assert xml_signature.get_signing_time() == "{SIGNATURE_TIMESTAMP}"
 
     with patch.object(xmlsig, "get_utc_time", lambda: datetime(2000, 1, 1, 0, 0, 0)):
         xml_signature.update_signed_info()
 
-    assert xml_signature.get_signed_time() == "2000-01-01T00:00:00Z"
+    assert xml_signature.get_signing_time() == "2000-01-01T00:00:00Z"
 
 
 def test_xmlsig_certificate(certificate_rsa):
@@ -153,17 +153,3 @@ def test_xmlsig_sign_ec(certificate_ec, private_key_ec, signature_algo):
         prehashed=True,
     )
     assert "No exception was raised"
-
-
-def test_xmlsig_root_ca_get_set(certificate_rsa, private_key_rsa):
-    xml_signature = generate_xml_signature(certificate_rsa)
-    assert xml_signature.get_root_ca_cert() is None
-
-    some_encapsulated_cert = cert_builder(private_key_rsa, subject="my service", issuer="my authority")
-    xml_signature.set_root_ca_cert(some_encapsulated_cert.public_bytes(Encoding.DER))
-    assert xml_signature.get_root_ca_cert() is None
-
-    root_ca_cert = cert_builder(private_key_rsa, subject="issuer CA", issuer="Authority")
-    xml_signature.set_root_ca_cert(root_ca_cert.public_bytes(Encoding.DER))
-
-    assert xml_signature.get_root_ca_cert().asn1.subject.native["common_name"] == "issuer CA"

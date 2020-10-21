@@ -104,6 +104,7 @@ class XmlSignature:
         self.doc_ids = [doc_entry.attrib["Id"] for doc_entry in doc_entries]
 
         self._certificate: Certificate = None
+        self._prepared = None
 
     @classmethod
     def create(cls):
@@ -116,10 +117,13 @@ class XmlSignature:
     def dump(self):
         return b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(self.xml)
 
-    def get_signed_time(self):
-        return self._get_node("xades:SigningTime").text
+    def get_signing_time(self):
+        time_node = self._get_signing_time_node()
+        if time_node is None or not time_node.text:
+            return None
+        return time_node.text
 
-    def get_certificate(self):
+    def get_certificate(self) -> Certificate:
         if not self._certificate:
             cert_asn1 = self.get_certificate_value()
             if cert_asn1:
@@ -138,7 +142,7 @@ class XmlSignature:
         return subject_cert.asn1.issuer.native["common_name"] if subject_cert else None
 
     def set_certificate(self, subject_cert: Union[bytes, Certificate]):
-        """Set the certificate that would be used for signing
+        """Set the signer's certificate
 
         :param subject_cert: bytes, file name (Python 3.4+), asn1crypto.x509.Certificate objects
         """
@@ -224,33 +228,32 @@ class XmlSignature:
     def update_signed_info(self):
         """Calculate the digest over SignedProperties and embed it in SignedInfo"""
 
-        sp_ref_node = next(
-            self.xml.find('.//ds:SignedInfo/ds:Reference[@Type="%s"]' % ref_type, self.NAMESPACES)
-            for ref_type in self.SIGNED_PROPERTIES_TYPE
-        )
-
-        # Get a transform/c14n algorithm
-        # This is very obscure in the standard:
-        # https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/#sec-ReferenceProcessingModel
-        try:
-            c14n_alg = sp_ref_node.find(".//ds:Transform").attrib["Algorithm"]
-        except:  # noqa: E722
-            c14n_alg = None
-
-        signed_props_node = self._get_node("xades:SignedProperties")
-        time_node = signed_props_node.find(".//xades:SigningTime", self.NAMESPACES)
+        # Set signing time
+        time_node = self._get_signing_time_node()
         # Add a UTC timestamp. Can't use isoformat() as it adds +00:00 and microseconds
         #  which can break the parser elsewhere
         time_node.text = get_utc_time().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        signed_props_c14n = self.canonicalize(signed_props_node, c14n_alg)
-        # TODO select algorithm based on DigestMethod // update DigestMethod
-        signed_props_hash = hashlib.sha256(signed_props_c14n).digest()
-        sp_ref_node.find(".//ds:DigestValue", self.NAMESPACES).text = base64.b64encode(signed_props_hash)
+        self._calc_signed_properties_hash(update=True)
 
+        self._prepared = True
         return self
 
+    @property
+    def prepared(self):
+        if self._prepared is None:
+            self._prepared = False
+            if self.get_signing_time():
+                old, new = self._calc_signed_properties_hash()
+                if old == new:
+                    self._prepared = True
+                else:
+                    raise ValueError(f"{old}\n{new}")
+        return self._prepared
+
     def signed_data(self):
+        if not self.prepared:
+            raise ValueError("The XML signature is not prepared")
         sign_info_node = self._get_node("ds:SignedInfo")
         return self.canonicalize(sign_info_node)
 
@@ -269,8 +272,13 @@ class XmlSignature:
         return self
 
     def get_signature_value(self):
-        sig_value_node = self._get_node("ds:SignatureValue")
-        return base64.b64decode(sig_value_node.text)
+        sig_value_node = self._get_signature_value_node()
+        try:
+            text = sig_value_node.text.strip()
+        except AttributeError:
+            return None
+
+        return base64.b64decode(text) if text else None
 
     def set_signature_value(self, signature: bytes):
         """Insert the base64-encoded value of a signature obtained from a signing service or device
@@ -280,7 +288,7 @@ class XmlSignature:
 
         :param signature: Binary signature
         """
-        sig_value_node = self._get_node("ds:SignatureValue")
+        sig_value_node = self._get_signature_value_node()
         sig_value_node.text = base64.b64encode(signature)
         return self
 
@@ -318,25 +326,8 @@ class XmlSignature:
         sig_method_node.attrib["Algorithm"] = self.SIGNATURE_ALGO_ID_TEMPLATE.format(algo=algo)
         return self
 
-    def get_root_ca_cert(self) -> Optional[Certificate]:
-        """
-        Iterates through encapsulated certificates and finds the root CA certificate.
-
-        There can be any number of encapsulated certs in no particular order, but should be only one root ca cert.
-        It is identified by its subject being equal to the issuer of the user cert.
-        """
-        user_cert_issuer_cn = self.get_certificate_issuer_common_name()
-        if user_cert_issuer_cn is None:
-            return None
-        certs_node = self._get_node("xades:CertificateValues")
-        for el in certs_node.findall(".//xades:EncapsulatedX509Certificate", self.NAMESPACES):
-            cert = load_certificate(base64.b64decode(el.text))
-            if cert.asn1.subject.native["common_name"] == user_cert_issuer_cn:
-                return cert
-        return None
-
     def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
-        """Sets a root CA cert.
+        """Sets a root CA cert. This is not mandatory
 
         :param root_cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
         """
@@ -379,9 +370,12 @@ class XmlSignature:
 
     def get_ocsp_response(self) -> Optional[OCSP]:
         ocsp_response_node = self._get_node("xades:EncapsulatedOCSPValue")
-        if not getattr(ocsp_response_node, 'text', None):
+        try:
+            text = ocsp_response_node.text.strip()
+        except AttributeError:
             return None
-        return OCSP.load(base64.b64decode(ocsp_response_node.text))
+
+        return OCSP.load(base64.b64decode(text)) if text else None
 
     def verify_ocsp_response(self):
         """Verify embedded OCSP response.
@@ -398,7 +392,7 @@ class XmlSignature:
         TSA.verify(self.get_timestamp_response(), self.get_timestamped_message())
 
     def get_timestamped_message(self):
-        sig_value_node = self._get_node("ds:SignatureValue")
+        sig_value_node = self._get_signature_value_node()
         method = self.get_c14n_method("xades:SignatureTimeStamp")
         return self.canonicalize(sig_value_node, method)
 
@@ -409,10 +403,11 @@ class XmlSignature:
         LT-TM must not even have the XML node.
         """
         ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
-        ts_value = getattr(ts_value_node, "text", None)
-        if not ts_value:
+        try:
+            text = ts_value_node.text.strip()
+        except AttributeError:
             return None
-        return base64.b64decode(ts_value_node.text)
+        return base64.b64decode(text) if text else None
 
     def set_timestamp_response(self, tsr):
         ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
@@ -449,3 +444,66 @@ class XmlSignature:
 
     def _get_node(self, tag_name) -> etree._Element:
         return self.xml.find(".//{}".format(tag_name), namespaces=self.NAMESPACES)
+
+    def _get_signed_properties_node(self):
+        return self.xml.find(
+            "./ds:Signature/ds:Object/xades:QualifyingProperties/xades:SignedProperties", self.NAMESPACES
+        )
+
+    def _get_signing_time_node(self):
+        return self.xml.find(
+            "./ds:Signature/ds:Object/xades:QualifyingProperties/xades:SignedProperties/"
+            "xades:SignedSignatureProperties/xades:SigningTime",
+            self.NAMESPACES,
+        )
+
+    def _get_signed_info_ref_node(self):
+        """Find the SignedInfo/Reference node that refers to the XMLSig itself (not to the signed files)"""
+        return next(
+            self.xml.find('./ds:Signature/ds:SignedInfo/ds:Reference[@Type="%s"]' % ref_type, self.NAMESPACES)
+            for ref_type in self.SIGNED_PROPERTIES_TYPE
+        )
+
+    def _get_signed_properties_c14n_algo(self, signed_info_ref_node: etree._Element):
+        """
+        Gets a transform/c14n algorithm for SignedProperties
+
+        The child nodes may be absent, in this case use the default c14n algo
+
+        # This is very obscure in the standard:
+        # https://www.w3.org/TR/2002/REC-xmldsig-core-20020212/#sec-ReferenceProcessingModel
+        """
+        try:
+            c14n_algo = signed_info_ref_node.find("./ds:Transforms/ds:Transform", self.NAMESPACES).attrib["Algorithm"]
+        except:  # noqa: E722
+            c14n_algo = None
+        return c14n_algo
+
+    def _get_signature_value_node(self):
+        return self.xml.find("./ds:Signature/ds:SignatureValue", self.NAMESPACES)
+
+    def _calc_signed_properties_hash(self, update=False):
+        """
+        Calculates, and updates, if requested, the SignedInfo/Reference/DigestValue
+
+        ...based on the current SignedProperties
+
+        :param update: update the digest value with current SignedProperties hash
+        :return: tuple(DigestValue node value, SignedProperties hash value)
+        """
+        si_ref_node = self._get_signed_info_ref_node()
+
+        signed_props_node = self._get_signed_properties_node()
+        c14n_algo = self._get_signed_properties_c14n_algo(si_ref_node)
+
+        signed_props_c14n = self.canonicalize(signed_props_node, c14n_algo)
+        # TODO select algorithm based on DigestMethod // update DigestMethod
+        signed_props_hash = hashlib.sha256(signed_props_c14n).digest()
+
+        new_digest_value = base64.b64encode(signed_props_hash).decode()
+
+        si_digest_node = si_ref_node.find("./ds:DigestValue", self.NAMESPACES)
+        if update:
+            si_digest_node.text = new_digest_value
+
+        return si_digest_node.text, new_digest_value
