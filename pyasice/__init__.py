@@ -4,4 +4,4 @@ from .utils import finalize_signature, prepare_signature
 from .xmlsig import XmlSignature  # noqa: F401
 
 
-__version__ = "1.0b0"
+__version__ = "1.0b1"
