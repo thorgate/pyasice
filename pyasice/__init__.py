@@ -8,4 +8,4 @@ from .xmlsig import XmlSignature  # noqa: F401
 # simply: except pyasice.Error
 Error = PyAsiceError
 
-__version__ = "1.0b2"
+__version__ = "1.0"
