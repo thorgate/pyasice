@@ -2,10 +2,11 @@
 
 from setuptools import setup
 
+
 with open("pyasice/__init__.py") as f:
     version_line = next(line for line in f if line.startswith("__version__"))
 
-version = version_line.split('=')[-1].strip().strip('"' + "'")
+version = version_line.split("=")[-1].strip().strip('"' + "'")
 
 readme = open("README.md").read()
 
