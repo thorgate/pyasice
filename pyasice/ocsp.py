@@ -78,12 +78,13 @@ class OCSP(object):
             )
             response.raise_for_status()
         except requests.ConnectionError:
-            raise OCSPError("Failed to connect to OCSP service at {}".format(self.url))
+            raise OCSPError(f"Failed to connect to OCSP service at {self.url}")
         except requests.HTTPError as e:
-            raise OCSPError("Bad response from OCSP service at {}: {}".format(self.url, e))
+            raise OCSPError(f"Bad response from OCSP service at {self.url}: {e}")
 
-        assert response.status_code == 200  # this wouldn't tell anything yet
-        assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
+        content_type = response.headers["Content-Type"]
+        if content_type != self.RESPONSE_CONTENT_TYPE:
+            raise OCSPError(f"Invalid response content type '{content_type}' returned by OCSP service at {self.url}")
 
         ocsp_response = OCSPResponse.load(response.content)
         self.verify_response(ocsp_response)

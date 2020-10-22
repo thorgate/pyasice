@@ -49,8 +49,9 @@ class TSA:
         except requests.HTTPError as e:
             raise TSAError("Bad response from TSA service at {}: {}".format(self.url, e)) from e
 
-        assert response.status_code == 200
-        assert response.headers["Content-Type"] == self.RESPONSE_CONTENT_TYPE
+        content_type = response.headers["Content-Type"]
+        if content_type != self.RESPONSE_CONTENT_TYPE:
+            raise TSAError(f"Invalid response content type '{content_type}' returned by OCSP service at {self.url}")
 
         ts_response = TimeStampResp.load(response.content)
         # see asn1crypto.tsp.PKIStatus
@@ -119,8 +120,7 @@ class TSA:
 
             cert = content["certificates"][0].chosen
 
-            signature = signer_info["signature"]
-            assert isinstance(signature, OctetString)
+            signature: OctetString = signer_info["signature"]
             signature_bytes = signature.native
 
             sig_algo = signer_info["signature_algorithm"]["algorithm"].native
