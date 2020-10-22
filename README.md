@@ -109,7 +109,7 @@ The specific standards outlined in that document:
 * ETSI TS 102 918 v1.2.1 - Associated Signature Containers (ASiC) and its
   Baseline Profile ETSI TS 103 174.
 
-The difference between ASiC-E and BDOC is almost exclusively in the terminology use.
+The difference between ASiC-E and BDOC is almost exclusively in terminology.
 
 The [BDOC 2.1.2 spec](https://www.id.ee/wp-content/uploads/2020/06/bdoc-spec212-eng.pdf) states:
 
@@ -178,6 +178,10 @@ We'll go over each section below.
 
 ### SignedInfo
 
+The `SignedInfo` node is the source of the data being signed. The XML content of the node, canonicalized
+using the `CanonicalizationMethod` as per the respective child node, is hashed using an algorithm defined in
+the `SignatureMethod` child node, and this hash is fed to a signing service (ID card, SmartID etc.) 
+
 ```xml
 <ds:SignedInfo Id="S0-SignedInfo">
     <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2006/12/xml-c14n11"></ds:CanonicalizationMethod>
@@ -196,15 +200,12 @@ We'll go over each section below.
 </ds:SignedInfo>
 ```
 
-This section contains some static fields, like `CanonicalizationMethod` and `SignatureMethod`. 
-The `CanonicalizationMethod` tag defines an algorithm used for XML canonicalization, more on that below in this chapter.
-
-The other, most important, fields are the `Reference` ones. And they are quite different in purpose and formation.
+The `Reference` fields are different in purpose and formation.
 
 The first `Reference` field is about the signed document and as such, has an `URI` attribute of the document's file name.
 Its child `DigestValue` element is the SHA256 hash of the document, it is, incidentally, the very hash that is sent to the SmartID API for signing.
 
-The second `Reference` is an interesting beast, as it is built on the basis of some fields defined later in the [SignedProperties](#SignedProperties) section.
+The second `Reference` is built on the basis of some fields defined later in the [SignedProperties](#SignedProperties) section.
 Its child `DigestValue` is calculated as a SHA256 hash of the canonicalized XML output of the  `SignedProperties` tag, after that one is formed:
 The `URI` attribute of this `Reference` tag is the `#`-prefixed `Id` attribute of the `SignedProperties` tag.
 
@@ -231,7 +232,8 @@ If it's not present, then the default, ie. not exclusive, c14n is used.
 
 ### KeyInfo
 
-This section contains just the base64-encoded user certificate value, e.g. the SmartID API response's `cert.value`:
+This section contains the base64-encoded user certificate value, e.g. the SmartID API response's `cert.value`,
+or the certificate obtained from an ID card:
 ```xml
 <ds:KeyInfo Id="S0-KeyInfo">
     <ds:X509Data>
@@ -333,9 +335,14 @@ to place it in the appropriate `<ds:Reference>` element.
 
 ### SignatureValue
 
-This is the `signature.value` from the SmartID response.
+```xml
+<ds:SignatureValue Id="SIG-{SIGNATURE_ID}"><!-- Base64-encoded SIGNATURE_VALUE, gotten externally --></ds:SignatureValue>
+```
 
-:question: Is it?
+A base64-encoded value of the signature calculated over the signed data. 
+The signed data is the `ds:SignedInfo` section, as [described above](#signedinfo).
+
+When using SmartID/MobileID, this is taken from the `signature.value` field of the response.
 
 ### KeyInfo
 
