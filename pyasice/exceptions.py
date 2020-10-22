@@ -6,7 +6,7 @@ class PyAsiceError(Exception):
     pass
 
 
-class ContainerFormatError(PyAsiceError):
+class ContainerError(PyAsiceError):
     pass
 
 

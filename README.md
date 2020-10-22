@@ -40,13 +40,13 @@ container\
     .add_file('test.txt', b'Test data', 'application/pdf')\
     .add_signature(xmlsig)\
     .save('test.asice')
-```
 
-Use `Container(filename)` to open an existing container:
-```python
-from pyasice import Container, XmlSignature
+# container is a context manager:
+with Container() as container:
+    container.add_file('a', b'b', 'c').save('path/to')
 
-container = Container('test.asice')
+# Use `Container(filename)` to open an existing container:
+container = Container.open('test.asice')
 
 # Verify container
 container.verify_signatures()
@@ -55,10 +55,9 @@ container.verify_signatures()
 with container.open_file('test.txt') as f:
     assert f.read() == b'Test data'
 
-# Add signatures
-another_xmlsig = XmlSignature.create().add_document('name', b'content', 'mime/type')
-# ... here goes the signing, confirming and timestamping part ... 
-container.add_signature(another_xmlsig).save()
+# Iterate over signatures
+for xmlsig in container.iter_signatures():
+    xmlsig.get_signing_time()
 ```
 
 ### Signing Flow Utilities
@@ -66,12 +65,8 @@ container.add_signature(another_xmlsig).save()
 ```python
 from pyasice import Container, finalize_signature
 
-# get this from the ID provider, e.g. sk.ee. Here we use the `esteid-certificates` PyPI package
-import esteid_certificates
-root_certificate = esteid_certificates.get_root_certificate()
-
 # get this from an external service, ID card, or elsewhere
-user_certificate = b'der encoded user certificate'
+user_certificate = b'user certificate in DER/PEM format'
 
 container = Container()
 container.add_file("test.txt", b'Test', "text/plain")
@@ -83,13 +78,19 @@ xml_sig = container.prepare_signature(user_certificate)
 signature_value = externally.sign(xml_sig.signed_data())
 xml_sig.set_signature_value(signature_value)
 
+# Get issuer certificate from the ID service provider, e.g. sk.ee. 
+# Here we use the user certificate's `issuer.common_name` field to identify the issuer cert,
+# and find the cert in the `esteid-certificates` PyPI package. 
+issuer_cert_name = xml_sig.get_certificate_issuer_common_name()
+import esteid_certificates
+issuer_certificate = esteid_certificates.get_certificate(issuer_cert_name)
+
 # Complete the XML signature with OCSP and optionally Timestamping
 finalize_signature(xml_sig, ocsp_url="https://ocsp.server.url", tsa_url="https://tsa.server.url")
 
 container.add_signature(xml_sig)
 
-with open("path/to/file.asice", "wb") as f:
-    f.write(container.finalize().getbuffer())
+container.save("path/to/file.asice")
 ```
 
 

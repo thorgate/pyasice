@@ -7,7 +7,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from lxml import etree
 from oscrypto.asymmetric import Certificate
 
-from .exceptions import ContainerFormatError, NoFilesToSign
+from .exceptions import ContainerError, NoFilesToSign
 from .xmlsig import XmlSignature
 
 
@@ -37,7 +37,7 @@ class Container(object):
     """
 
     # save an `import ...` for users of the class
-    FormatError = ContainerFormatError
+    Error = ContainerError
     NoFilesToSign = NoFilesToSign
 
     META_DIR = "META-INF"
@@ -47,6 +47,7 @@ class Container(object):
 
     # Manifest structure constants
     MANIFEST_FILE = "manifest.xml"
+    MANIFEST_PATH = "{}/{}".format(META_DIR, MANIFEST_FILE)
     MANIFEST_NS = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
     MANIFEST_NAMESPACES = {
         "manifest": MANIFEST_NS,
@@ -59,17 +60,16 @@ class Container(object):
     MIME_TYPE = "application/vnd.etsi.asic-e+zip"
     MIME_TYPE_FILE = "mimetype"
 
-    def __init__(self, name_or_file: Optional[Union[BinaryIO, str]] = None):
+    def __init__(self, stream: Optional[BinaryIO] = None):
         """
-        Create or open a BDOC/ASiC-E container from a file path/handle or a BytesIO buffer.
+        Create or open a BDOC/ASiC-E container from a stream, like a file handle or a BytesIO buffer.
 
-        NOTE: if `name_or_file` is not empty, opening an existing container is attempted.
+        NOTE: if `stream` is not empty, opening an existing container is attempted.
 
-        :param name_or_file: a path to container, or an open file
+        :param stream: a BytesIO buffer, or an open file
         """
-        self.name = None
 
-        if name_or_file is None:
+        if stream is None:
             buffer = io.BytesIO()
             self._zip_file = ZipFile(buffer, "a")
 
@@ -80,17 +80,14 @@ class Container(object):
             self._manifest = None
             self._manifest_write_required = True
         else:
-            if isinstance(name_or_file, io.BytesIO):
-                buffer = name_or_file
+            if isinstance(stream, io.BytesIO):
+                buffer = stream
                 buffer.seek(0)
-            elif hasattr(name_or_file, "read") and callable(name_or_file.read):
+            elif hasattr(stream, "read") and callable(stream.read):
                 # Treat name_or_file as an open file handle
-                buffer = io.BytesIO(name_or_file.read())
+                buffer = io.BytesIO(stream.read())
             else:
-                # Treat name_or_file as file name
-                self.name = name_or_file
-                with open(name_or_file, "rb") as f:
-                    buffer = io.BytesIO(f.read())
+                raise TypeError(f"Failed to open stream {type(stream)}")
 
             # create a zip file in 'append' mode, to make possible both reading and adding files
             self._zip_file = ZipFile(buffer, "a")
@@ -100,8 +97,10 @@ class Container(object):
 
         self._zip_buffer: io.BytesIO = buffer
 
-    def __str__(self):
-        return self.name or repr(self)
+    @classmethod
+    def open(cls, path: str):
+        with open(path, "rb") as f:
+            return cls(f)
 
     def prepare_signature(self, signer_certificate: Union[bytes, Certificate]):
         """Generates an XML signature structure for files in the container"""
@@ -127,28 +126,15 @@ class Container(object):
           the buffer might be modified, which kind of defeats the optimization.
         """
         self._write_manifest()
-        self._zip_file.close()
-        self._zip_file = None
-        self._zip_buffer.seek(0)
-        return self._zip_buffer
+        buffer = self._zip_buffer
+        buffer.seek(0)
+        self._close()
+        return buffer
 
-    def save(self, name=None):
-        """Create the actual BDoc file in FS, with current content"""
-        if name is None:
-            name = self.name
-
-        if name is None:
-            raise ContainerFormatError(f"Can't save container '{self}' without a file name")
-
-        if not self.data_file_names:
-            raise ContainerFormatError(f"Can't save container '{self}' without data files")
-
-        with open(name, "wb") as f:
+    def save(self, path: str):
+        """Save the BDoc file to FS. This also closes the Container."""
+        with open(path, "wb") as f:
             f.write(self.finalize().getbuffer())
-
-        self._zip_buffer.seek(0)
-        self._zip_file = ZipFile(self._zip_buffer, "a")
-        return self
 
     def add_file(self, file_name: str, binary_data: bytes, mime_type="application/octet-stream", compress=True):
         """Add a data file.
@@ -158,6 +144,8 @@ class Container(object):
         :param mime_type: the file's content type as it appears in the container's manifest
         :param compress: on by default, there is no reason not to compress (except special cases)
         """
+        if not self._zip_file:
+            raise self.Error("Failed to add file: the container is closed.")
         manifest_xml = self._get_manifest_xml()
         new_manifest_entry = etree.Element(self.MANIFEST_TAG_FILE_ENTRY)
         new_manifest_entry.attrib[self.MANIFEST_ATTR_MEDIA_TYPE] = mime_type
@@ -176,12 +164,6 @@ class Container(object):
     def signature_file_names(self):
         return self._enumerate_signatures()
 
-    def get_contents(self):
-        self._zip_file.close()
-        value = self._zip_buffer.getvalue()
-        self._zip_file = ZipFile(self._zip_buffer, "a")
-        return value
-
     def has_data_files(self):
         return any(self._enumerate_data_files())  # False if no elements
 
@@ -195,6 +177,8 @@ class Container(object):
 
     def open_file(self, file_name):
         """Read a file contained in the container"""
+        if not self._zip_file:
+            raise self.Error("Failed to add file: the container is closed.")
         return self._zip_file.open(file_name)
 
     def add_signature(self, signature: XmlSignature):
@@ -234,9 +218,12 @@ class Container(object):
         return self
 
     def verify_container(self):
+        if not self._zip_file:
+            raise self.Error("Failed to add file: the container is closed.")
+
         failed = self._zip_file.testzip()
         if failed:
-            raise ContainerFormatError("The container contains errors. First broken file: %s" % failed)
+            raise self.Error("The container contains errors. First broken file: %s" % failed)
         return self
 
     def _write_manifest(self):
@@ -246,11 +233,11 @@ class Container(object):
 
         manifest_xml = self._get_manifest_xml()
 
-        if self._manifest_file_name in self._read_toc():
-            self._delete_files(self._manifest_file_name)
+        if self.MANIFEST_PATH in self._read_toc():
+            self._delete_files(self.MANIFEST_PATH)
 
         self._zip_file.writestr(
-            self._manifest_file_name, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
+            self.MANIFEST_PATH, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
         )
 
     def _add_mimetype(self):
@@ -259,6 +246,8 @@ class Container(object):
 
     def _read_toc(self):
         """Read table of contents"""
+        if not self._zip_file:
+            raise self.Error("Failed to add file: the container is closed.")
         return self._zip_file.namelist()
 
     def _get_manifest_xml(self):
@@ -267,10 +256,6 @@ class Container(object):
             with open(self.MANIFEST_TEMPLATE_FILE, "rb") as f:
                 self._manifest = etree.XML(f.read())
         return self._manifest
-
-    @property
-    def _manifest_file_name(self):
-        return "{}/{}".format(self.META_DIR, self.MANIFEST_FILE)
 
     def _enumerate_signatures(self):
         return [file_name for file_name in self._read_toc() if re.match(self.SIGNATURE_FILES_REGEX, file_name)]
@@ -296,6 +281,9 @@ class Container(object):
         """
         Yields 2-tuples of file name and mime_type
         """
+        if not self._zip_file:
+            raise self.Error("Failed to add file: the container is closed.")
+
         manifest_xml = self._get_manifest_xml()
         media_type_attr = self.MANIFEST_ATTR_MEDIA_TYPE
         full_path_attr = self.MANIFEST_ATTR_FULL_PATH
@@ -312,29 +300,27 @@ class Container(object):
         # Verify ZIP table of contents
         toc = self._read_toc()
         if not toc:
-            raise ContainerFormatError(f"Empty container '{self}'")
+            raise self.Error(f"Empty container '{self}'")
         if toc[0] != self.MIME_TYPE_FILE:
             # Check that mimetype is the first entry.
             # NOTE: actually as per ETSI TS 102 918, MIME_TYPE_FILE is optional
             # neither is it explicitly stated as *the first entry* in BDOC2.1:2014 [OID: 1.3.6.1.4.1.10015.1000.3.2.3]
             # but digidoc software deems the opposite.
-            raise ContainerFormatError(
-                f"Container '{self}' must contain mime type file '{self.MIME_TYPE_FILE}' as first file"
-            )
-        if self._manifest_file_name not in toc:
-            raise ContainerFormatError(f"Container '{self}' does not contain manifest file '{self.MANIFEST_FILE}'")
+            raise self.Error(f"Container '{self}' must contain mime type file '{self.MIME_TYPE_FILE}' as first file")
+        if self.MANIFEST_PATH not in toc:
+            raise self.Error(f"Container '{self}' does not contain manifest file '{self.MANIFEST_FILE}'")
 
         # Read the meta data
         with self.open_file(self.MIME_TYPE_FILE) as f:
             mime_type = f.read()
         if mime_type.decode() != self.MIME_TYPE:
-            raise ContainerFormatError(f"Invalid mime type '{mime_type}' for container '{self}'")
+            raise self.Error(f"Invalid mime type '{mime_type}' for container '{self}'")
 
         try:
-            with self.open_file(self._manifest_file_name) as f:
+            with self.open_file(self.MANIFEST_PATH) as f:
                 self._manifest = etree.XML(f.read())
         except Exception:
-            raise ContainerFormatError(f"Failed to read manifest for container '{self}'")
+            raise self.Error(f"Failed to read manifest for container '{self}'")
 
         toc_data_files = [
             file_name
@@ -345,4 +331,19 @@ class Container(object):
         manifest_data_files = [name for name, _ in self._enumerate_data_files()]
 
         if sorted(toc_data_files) != sorted(manifest_data_files):
-            raise ContainerFormatError("Manifest file is out of date")
+            raise self.Error("Manifest file is out of date")
+
+    def _close(self):
+        if self._zip_file:
+            self._zip_file.close()
+            self._zip_file = None
+        self._zip_buffer = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._close()
+
+    def __str__(self):
+        return repr(self)
