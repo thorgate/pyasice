@@ -247,8 +247,6 @@ class XmlSignature:
                 old, new = self._calc_signed_properties_hash()
                 if old == new:
                     self._prepared = True
-                else:
-                    raise ValueError(f"{old}\n{new}")
         return self._prepared
 
     def signed_data(self):
