@@ -169,7 +169,7 @@ class XmlSignature:
 
         return self
 
-    def add_document(self, file_name, binary_data, mime_type, hash_type="sha256"):
+    def add_document(self, file_name, binary_data, mime_type, hash_type="sha256") -> 'XmlSignature':
         """Add a document for signing
 
         :param file_name: the file name to display in the container
@@ -225,7 +225,7 @@ class XmlSignature:
 
         return self
 
-    def update_signed_info(self):
+    def update_signed_info(self) -> 'XmlSignature':
         """Calculate the digest over SignedProperties and embed it in SignedInfo"""
 
         # Set signing time
@@ -240,7 +240,7 @@ class XmlSignature:
         return self
 
     @property
-    def prepared(self):
+    def prepared(self) -> bool:
         if self._prepared is None:
             self._prepared = False
             if self.get_signing_time():
@@ -249,19 +249,19 @@ class XmlSignature:
                     self._prepared = True
         return self._prepared
 
-    def signed_data(self):
+    def signed_data(self) -> bytes:
         if not self.prepared:
             raise ValueError("The XML signature is not prepared")
         sign_info_node = self._get_node("ds:SignedInfo")
         return self.canonicalize(sign_info_node)
 
-    def digest(self):
+    def digest(self) -> bytes:
         signature_algo = self.get_signature_algorithm()
         hash_algo_name = signature_algo.split("-")[-1]
         hash_algo = getattr(hashlib, hash_algo_name)
         return hash_algo(self.signed_data()).digest()
 
-    def verify(self):
+    def verify(self) -> 'XmlSignature':
         hash_algo = self.get_signature_algorithm().split("-")[-1]
         cert = self.get_certificate_value()
         signature = self.get_signature_value()
@@ -278,7 +278,7 @@ class XmlSignature:
 
         return base64.b64decode(text) if text else None
 
-    def set_signature_value(self, signature: bytes):
+    def set_signature_value(self, signature: bytes) -> 'XmlSignature':
         """Insert the base64-encoded value of a signature obtained from a signing service or device
 
         NOTE: the signature method should be known in advance, as it's part of the SignedInfo structure over which
@@ -300,7 +300,7 @@ class XmlSignature:
         sig_method_node = self._get_node("ds:SignatureMethod")
         return sig_method_node.attrib["Algorithm"].split("#")[-1]
 
-    def set_signature_algorithm(self, algo: str = None):
+    def set_signature_algorithm(self, algo: str = None) -> 'XmlSignature':
         """Set a signature algorithm, if it is not the default one (rsa-sha256).
 
         NOTE: Since the algorithm is included in the signed data, it is not possible to change the algo
@@ -324,7 +324,7 @@ class XmlSignature:
         sig_method_node.attrib["Algorithm"] = self.SIGNATURE_ALGO_ID_TEMPLATE.format(algo=algo)
         return self
 
-    def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]):
+    def set_root_ca_cert(self, root_cert: Union[Certificate, bytes]) -> 'XmlSignature':
         """Sets a root CA cert. This is not mandatory
 
         :param root_cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
@@ -338,7 +338,7 @@ class XmlSignature:
         certs_node.append(ca_node)
         return self
 
-    def set_ocsp_response(self, ocsp_response: OCSP, embed_ocsp_certificate=False):
+    def set_ocsp_response(self, ocsp_response: OCSP, embed_ocsp_certificate=False) -> 'XmlSignature':
         """
         Embed the OCSP response and certificates
 
@@ -375,21 +375,23 @@ class XmlSignature:
 
         return OCSP.load(base64.b64decode(text)) if text else None
 
-    def verify_ocsp_response(self):
+    def verify_ocsp_response(self)-> 'XmlSignature':
         """Verify embedded OCSP response.
 
         :raises exceptions.SignatureVerificationError:
         """
         self.get_ocsp_response().verify()
+        return self
 
-    def verify_ts_response(self):
+    def verify_ts_response(self)-> 'XmlSignature':
         """Verify embedded TSA response.
 
         :raises exceptions.SignatureVerificationError:
         """
         TSA.verify(self.get_timestamp_response(), self.get_timestamped_message())
+        return self
 
-    def get_timestamped_message(self):
+    def get_timestamped_message(self) -> bytes:
         sig_value_node = self._get_signature_value_node()
         method = self.get_c14n_method("xades:SignatureTimeStamp")
         return self.canonicalize(sig_value_node, method)
@@ -407,12 +409,12 @@ class XmlSignature:
             return None
         return base64.b64decode(text) if text else None
 
-    def set_timestamp_response(self, tsr):
+    def set_timestamp_response(self, tsr)-> 'XmlSignature':
         ts_value_node = self._get_node("xades:EncapsulatedTimeStamp")
         ts_value_node.text = base64.b64encode(tsr.dump())
         return self
 
-    def remove_timestamp_node(self):
+    def remove_timestamp_node(self)-> 'XmlSignature':
         """LT-TM profile requires the absence of the XML node"""
         ts_value_node = self._get_node("xades:SignatureTimeStamp")
         ts_value_node.getparent().remove(ts_value_node)
@@ -432,7 +434,7 @@ class XmlSignature:
             method = self.C14N_METHODS[0]
         return method
 
-    def canonicalize(self, node, method=None):
+    def canonicalize(self, node, method=None)-> bytes:
         if method is not None:
             assert method in self.C14N_METHODS
         else:
@@ -480,7 +482,7 @@ class XmlSignature:
     def _get_signature_value_node(self):
         return self.xml.find("./ds:Signature/ds:SignatureValue", self.NAMESPACES)
 
-    def _calc_signed_properties_hash(self, update=False):
+    def _calc_signed_properties_hash(self, update=False) -> tuple:
         """
         Calculates, and updates, if requested, the SignedInfo/Reference/DigestValue
 

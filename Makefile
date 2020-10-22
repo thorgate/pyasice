@@ -10,13 +10,13 @@ venv:
 .PHONY:
 lint:
 	black --check .
-	isort --check-only --project=pyasice .
+	isort --check-only --project=$(PROJECT) .
 	flake8
 
 .PHONY:
 fmt:
 	black .
-	isort --project=pyasice .
+	isort --project=$(PROJECT) .
 
 .PHONY:
 test:

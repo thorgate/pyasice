@@ -134,6 +134,11 @@ class TSA:
 
     @staticmethod
     def build_message_imprint(message):
+        if not isinstance(message, bytes):
+            raise TypeError(f"Invalid message type: expected bytes, got {type(message)}")
+        if not message:
+            raise ValueError("Message can not be empty")
+
         return {
             "hash_algorithm": {"algorithm": "sha256"},
             "hashed_message": hashlib.sha256(message).digest(),
