@@ -45,10 +45,10 @@ container\
 with Container() as container:
     container.add_file('a', b'b', 'c').save('path/to')
 
-# Use `Container(filename)` to open an existing container:
+# Open an existing container:
 container = Container.open('test.asice')
 
-# Verify container
+# Verify container. Raises pyasice.SignatureVerificationError on failure
 container.verify_signatures()
 
 # Read files in the container

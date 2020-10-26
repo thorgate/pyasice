@@ -11,6 +11,7 @@ from cryptography.hazmat.backends import default_backend
 from lxml import etree
 from oscrypto.asymmetric import Certificate, load_certificate
 
+from .exceptions import SignatureVerificationError
 from .ocsp import OCSP
 from .signature_verifier import verify
 from .tsa import TSA
@@ -380,7 +381,10 @@ class XmlSignature:
 
         :raises exceptions.SignatureVerificationError:
         """
-        self.get_ocsp_response().verify()
+        try:
+            self.get_ocsp_response().verify()
+        except AttributeError:
+            raise SignatureVerificationError("The XML Signature doesn't contain an OCSP response")
         return self
 
     def verify_ts_response(self) -> "XmlSignature":

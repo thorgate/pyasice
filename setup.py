@@ -19,7 +19,7 @@ setup(
     long_description=readme,
     long_description_content_type="text/markdown",
     author="Thorgate",
-    author_email="jyrno@thorgate.eu",
+    author_email="yuriy@thorgate.eu",
     url="https://github.com/thorgate/pyasice",
     packages=[
         "pyasice",
@@ -31,7 +31,7 @@ setup(
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",
+        "License :: OSI Approved :: ISC License (ISCL)",
         "Natural Language :: English",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",

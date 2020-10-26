@@ -9,8 +9,8 @@ from asn1crypto.ocsp import OCSPRequest, OCSPResponse, TBSRequest, TBSRequestExt
 from asn1crypto.x509 import Certificate as ASN1Certificate
 from oscrypto import asymmetric
 
+from . import signature_verifier
 from .exceptions import PyAsiceError
-from .signature_verifier import verify
 
 
 class SKHackedTBSRequestExtension(TBSRequestExtension):
@@ -140,7 +140,7 @@ class OCSP(object):
         if signature_algorithm not in ["sha256_rsa", "sha1_rsa"]:
             raise ValueError("Unsupported signature algorithm")
 
-        verify(cert_bytes, signature.native, tbs_bytes, hash_algo=signature_algorithm.split("_")[0])
+        signature_verifier.verify(cert_bytes, signature.native, tbs_bytes, hash_algo=signature_algorithm.split("_")[0])
 
     @classmethod
     def load(cls, binary_data):
