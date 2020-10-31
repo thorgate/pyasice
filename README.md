@@ -1,5 +1,8 @@
 # pyasice - ASiC-E (BDOC) and XAdES Manipulation Library
 
+[![Build Status](https://travis-ci.org/thorgate/pyasice.svg?branch=main)](https://travis-ci.org/thorgate/pyasice)
+[![Coverage Status](https://coveralls.io/repos/github/thorgate/pyasice/badge.svg?branch=main)](https://coveralls.io/github/thorgate/pyasice?branch=main)
+
 The `pyasice` library is designed to:
 * create, read, and verify XAdES/XMLDsig/eIDAS electronic signatures,
 * validate signers' certificates with OCSP,
