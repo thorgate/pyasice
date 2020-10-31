@@ -24,5 +24,4 @@ test:
 
 .PHONY:
 coverage:
-	pytest --cov=$(PROJECT)
-	coverage html
+	pytest --cov=$(PROJECT) --cov-report html --cov-report term-missing
