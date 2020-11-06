@@ -1,5 +1,6 @@
 # pyasice - ASiC-E (BDOC) and XAdES Manipulation Library
 
+[![pypi Package](https://badge.fury.io/py/pyasice.png)](https://badge.fury.io/py/pyasice)
 [![Build Status](https://travis-ci.org/thorgate/pyasice.svg?branch=main)](https://travis-ci.org/thorgate/pyasice)
 [![Coverage Status](https://coveralls.io/repos/github/thorgate/pyasice/badge.svg?branch=main)](https://coveralls.io/github/thorgate/pyasice?branch=main)
 
