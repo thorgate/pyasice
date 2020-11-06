@@ -22,13 +22,6 @@ def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=Tr
 
     subject_cert = xml_signature.get_certificate()
 
-    # Get an OCSP status confirmation
-    ocsp = OCSP(ocsp_url)
-    ocsp.validate(subject_cert, issuer_cert, signature_value)
-
-    # Embed the OCSP response
-    xml_signature.set_ocsp_response(ocsp)
-
     if lt_ts:
         # Get a signature TimeStamp
         tsa = TSA(tsa_url)
@@ -36,3 +29,10 @@ def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=Tr
         xml_signature.set_timestamp_response(tsr)
     else:
         xml_signature.remove_timestamp_node()
+
+    # Get an OCSP status confirmation
+    ocsp = OCSP(ocsp_url)
+    ocsp.validate(subject_cert, issuer_cert, signature_value)
+
+    # Embed the OCSP response
+    xml_signature.set_ocsp_response(ocsp)
