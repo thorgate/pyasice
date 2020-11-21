@@ -71,6 +71,11 @@ def certificate_rsa(private_key_rsa) -> Certificate:
     return cert_builder(private_key_rsa)
 
 
+@pytest.fixture()
+def certificate_rsa_bytes(certificate_rsa) -> bytes:
+    return certificate_rsa.public_bytes(Encoding.DER)
+
+
 def generate_xml_signature(certificate: Certificate, signature_algo=None):
     return (
         XmlSignature.create()

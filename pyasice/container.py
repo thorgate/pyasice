@@ -2,7 +2,7 @@ import io
 import os
 import re
 from typing import BinaryIO, Optional, Union
-from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
+from zipfile import BadZipFile, ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from lxml import etree
 from oscrypto.asymmetric import Certificate
@@ -69,12 +69,11 @@ class Container(object):
         :param stream: a BytesIO buffer, or an open file
         """
 
-        if stream is None:
-            buffer = io.BytesIO()
-            self._zip_file = ZipFile(buffer, "a")
+        self._zip_file: Optional[ZipFile] = None
+        self._zip_buffer: io.BytesIO
 
-            # add mimetype immediately, so that it's the first file in the TOC
-            self._add_mimetype()
+        if stream is None:
+            self._zip_buffer = self._create_container()
 
             # adding manifest can be deferred to the save() method call
             self._manifest = None
@@ -89,13 +88,10 @@ class Container(object):
             else:
                 raise TypeError(f"Failed to open stream {type(stream)}")
 
-            # create a zip file in 'append' mode, to make possible both reading and adding files
-            self._zip_file = ZipFile(buffer, "a")
+            self._zip_buffer = buffer
 
-            self._verify_container_contents()
+            self.verify_container()
             self._manifest_write_required = False
-
-        self._zip_buffer: io.BytesIO = buffer
 
     @classmethod
     def open(cls, path: str):
@@ -144,17 +140,42 @@ class Container(object):
         :param mime_type: the file's content type as it appears in the container's manifest
         :param compress: on by default, there is no reason not to compress (except special cases)
         """
-        if not self._zip_file:
-            raise self.Error("Failed to add file: the container is closed.")
         manifest_xml = self._get_manifest_xml()
         new_manifest_entry = etree.Element(self.MANIFEST_TAG_FILE_ENTRY)
         new_manifest_entry.attrib[self.MANIFEST_ATTR_MEDIA_TYPE] = mime_type
         new_manifest_entry.attrib[self.MANIFEST_ATTR_FULL_PATH] = file_name
         manifest_xml.append(new_manifest_entry)
         compress_type = ZIP_DEFLATED if compress else ZIP_STORED
-        self._zip_file.writestr(file_name, binary_data, compress_type)
+        with self.zip_writer as zip_file:
+            zip_file.writestr(file_name, binary_data, compress_type)
         self._manifest_write_required = True
         return self
+
+    @property
+    def zip_file(self):
+        """
+        Returns a read only ZipFile handle for the current buffer.
+        """
+        if not self._zip_file:
+            if self._zip_buffer is None:
+                raise self.Error("Failed to read zip file: the container is closed")
+
+            try:
+                self._zip_file = ZipFile(self._zip_buffer, "r")
+            except BadZipFile as e:
+                raise self.Error("Failed to open container: not a valid zip file") from e
+        return self._zip_file
+
+    @property
+    def zip_writer(self):
+        """
+        Returns a writable (append-mode) ZipFile handle.
+        """
+        if self._zip_buffer is None:
+            raise self.Error("Failed to modify zip file: the container is closed")
+        # clear the cached zip reader
+        self._close_zip_file()
+        return ZipFile(self._zip_buffer, "a")
 
     @property
     def data_file_names(self):
@@ -177,18 +198,10 @@ class Container(object):
 
     def open_file(self, file_name):
         """Read a file contained in the container"""
-        if not self._zip_file:
-            raise self.Error("Failed to add file: the container is closed.")
-        return self._zip_file.open(file_name)
+        return self.zip_file.open(file_name)
 
     def add_signature(self, signature: XmlSignature):
         """Add a signature calculated over the data files."""
-        # Without this check, the zip container randomly gets corrupted
-        # after adding a signature file, with errors like:
-        # """ zipfile.BadZipFile: File name in directory 'META-INF/signatures1.xml'
-        # """ and header b'META-INF/signatures2.xml' differ.
-        self.verify_container()
-
         embedded_signatures = sorted(self._enumerate_signatures())
 
         if embedded_signatures:
@@ -199,7 +212,8 @@ class Container(object):
 
         new_sig_file = self.SIGNATURE_FILES_TEMPLATE.format(next_n)
         assert new_sig_file not in embedded_signatures
-        self._zip_file.writestr(new_sig_file, signature.dump(), ZIP_DEFLATED)
+        with self.zip_writer as zip_file:
+            zip_file.writestr(new_sig_file, signature.dump(), ZIP_DEFLATED)
         return self
 
     def iter_signatures(self):
@@ -218,87 +232,11 @@ class Container(object):
         return self
 
     def verify_container(self):
-        if not self._zip_file:
-            raise self.Error("Failed to add file: the container is closed.")
-
-        failed = self._zip_file.testzip()
+        failed = self.zip_file.testzip()
         if failed:
             raise self.Error("The container contains errors. First broken file: %s" % failed)
-        return self
 
-    def _write_manifest(self):
-        """Create/update the manifest"""
-        if not self._manifest_write_required:
-            return
-
-        manifest_xml = self._get_manifest_xml()
-
-        if self.MANIFEST_PATH in self._read_toc():
-            self._delete_files(self.MANIFEST_PATH)
-
-        self._zip_file.writestr(
-            self.MANIFEST_PATH, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
-        )
-
-    def _add_mimetype(self):
-        # NOTE: the mimetype entry should be the first one and not compressed, as per ETSI TS 102 918 (though optional)
-        self._zip_file.writestr(self.MIME_TYPE_FILE, self.MIME_TYPE.encode(), ZIP_STORED)
-
-    def _read_toc(self):
-        """Read table of contents"""
-        if not self._zip_file:
-            raise self.Error("Failed to add file: the container is closed.")
-        return self._zip_file.namelist()
-
-    def _get_manifest_xml(self):
-        if self._manifest is None:
-            # Create a manifest from template
-            with open(self.MANIFEST_TEMPLATE_FILE, "rb") as f:
-                self._manifest = etree.XML(f.read())
-        return self._manifest
-
-    def _enumerate_signatures(self):
-        return [file_name for file_name in self._read_toc() if re.match(self.SIGNATURE_FILES_REGEX, file_name)]
-
-    def _delete_files(self, *file_names_to_delete):
-        new_buf = io.BytesIO()
-        new_zip_file = ZipFile(new_buf, "a")
-        file_names_to_delete = set(file_names_to_delete)
-        for entry in self._zip_file.infolist():
-            file_name = entry.filename
-            if file_name in file_names_to_delete:
-                file_names_to_delete.remove(file_name)
-                continue
-
-            with self.open_file(file_name) as f:
-                new_zip_file.writestr(file_name, f.read(), entry.compress_type)
-
-        self._zip_file.close()
-        self._zip_buffer = new_buf
-        self._zip_file = new_zip_file
-
-    def _enumerate_data_files(self):
-        """
-        Yields 2-tuples of file name and mime_type
-        """
-        if not self._zip_file:
-            raise self.Error("Failed to add file: the container is closed.")
-
-        manifest_xml = self._get_manifest_xml()
-        media_type_attr = self.MANIFEST_ATTR_MEDIA_TYPE
-        full_path_attr = self.MANIFEST_ATTR_FULL_PATH
-
-        for file_entry in manifest_xml.iterchildren():
-            assert file_entry.tag == self.MANIFEST_TAG_FILE_ENTRY
-            file_name = file_entry.attrib[full_path_attr]
-            if file_name != "/":  # skip the 'root' entry
-                yield file_name, file_entry.attrib[media_type_attr]
-
-    def _verify_container_contents(self):
-        self.verify_container()
-
-        # Verify ZIP table of contents
-        toc = self._read_toc()
+        toc = self.zip_file.namelist()
         if not toc:
             raise self.Error(f"Empty container '{self}'")
         if toc[0] != self.MIME_TYPE_FILE:
@@ -319,8 +257,8 @@ class Container(object):
         try:
             with self.open_file(self.MANIFEST_PATH) as f:
                 self._manifest = etree.XML(f.read())
-        except Exception:
-            raise self.Error(f"Failed to read manifest for container '{self}'")
+        except Exception as e:
+            raise self.Error(f"Failed to read manifest for container '{self}'") from e
 
         toc_data_files = [
             file_name
@@ -333,10 +271,82 @@ class Container(object):
         if sorted(toc_data_files) != sorted(manifest_data_files):
             raise self.Error("Manifest file is out of date")
 
-    def _close(self):
+    def _write_manifest(self):
+        """Create/update the manifest"""
+        if not self._manifest_write_required:
+            return
+
+        manifest_xml = self._get_manifest_xml()
+
+        if self.MANIFEST_PATH in self._read_toc():
+            self._delete_files(self.MANIFEST_PATH)
+
+        with self.zip_writer as zip_file:
+            zip_file.writestr(
+                self.MANIFEST_PATH, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
+            )
+
+    @classmethod
+    def _create_container(cls):
+        buffer = io.BytesIO()
+        with ZipFile(buffer, "w") as new_zip_file:
+            # NOTE: the mimetype entry should be the first one in the zip file and not compressed,
+            # as per ETSI TS 102 918 (though optional)
+            new_zip_file.writestr(cls.MIME_TYPE_FILE, cls.MIME_TYPE.encode(), ZIP_STORED)
+        return buffer
+
+    def _read_toc(self):
+        """Read table of contents"""
+        return self.zip_file.namelist()
+
+    def _get_manifest_xml(self):
+        if self._manifest is None:
+            # Create a manifest from template
+            with open(self.MANIFEST_TEMPLATE_FILE, "rb") as f:
+                self._manifest = etree.XML(f.read())
+        return self._manifest
+
+    def _enumerate_signatures(self):
+        return [file_name for file_name in self._read_toc() if re.match(self.SIGNATURE_FILES_REGEX, file_name)]
+
+    def _delete_files(self, *file_names_to_delete):
+        new_buf = io.BytesIO()
+        new_zip_file = ZipFile(new_buf, "w")
+        file_names_to_delete = set(file_names_to_delete)
+        for entry in self._zip_file.infolist():
+            file_name = entry.filename
+            if file_name in file_names_to_delete:
+                file_names_to_delete.remove(file_name)
+                continue
+
+            with self.open_file(file_name) as f:
+                new_zip_file.writestr(file_name, f.read(), entry.compress_type)
+
+        new_zip_file.close()
+        self._close_zip_file()  # clear the cached zip reader
+        self._zip_buffer = new_buf
+
+    def _enumerate_data_files(self):
+        """
+        Yields 2-tuples of file name and mime_type
+        """
+        manifest_xml = self._get_manifest_xml()
+        media_type_attr = self.MANIFEST_ATTR_MEDIA_TYPE
+        full_path_attr = self.MANIFEST_ATTR_FULL_PATH
+
+        for file_entry in manifest_xml.iterchildren():
+            assert file_entry.tag == self.MANIFEST_TAG_FILE_ENTRY
+            file_name = file_entry.attrib[full_path_attr]
+            if file_name != "/":  # skip the 'root' entry
+                yield file_name, file_entry.attrib[media_type_attr]
+
+    def _close_zip_file(self):
         if self._zip_file:
             self._zip_file.close()
             self._zip_file = None
+
+    def _close(self):
+        self._close_zip_file()
         self._zip_buffer = None
 
     def __enter__(self):
