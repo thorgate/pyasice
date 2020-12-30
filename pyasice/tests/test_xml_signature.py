@@ -7,7 +7,6 @@ import pytest
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding
-from cryptography.hazmat.primitives.serialization import Encoding
 from lxml import etree
 from oscrypto.asymmetric import Certificate, load_certificate
 
@@ -63,13 +62,13 @@ def test_xmlsig_signing_time():
     assert xml_signature.get_signing_time() == "2000-01-01T00:00:00Z"
 
 
-def test_xmlsig_certificate(certificate_rsa):
+def test_xmlsig_certificate(certificate_rsa_bytes):
     xml_signature = XmlSignature.create()
 
     assert xml_signature.get_certificate_value() is None
     assert xml_signature.get_certificate() is None
 
-    cert = load_certificate(certificate_rsa.public_bytes(Encoding.DER))
+    cert = load_certificate(certificate_rsa_bytes)
 
     xml_signature.set_certificate(cert)
 
