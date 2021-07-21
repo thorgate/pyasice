@@ -65,9 +65,9 @@
                 </xades:SignedProperties>
                 <xades:UnsignedProperties>
                     <xades:UnsignedSignatureProperties>
-                        <xades:SignatureTimeStamp>
+                        <xades:SignatureTimeStamp Id="TS">
                             <ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
-                            <xades:EncapsulatedTimeStamp>
+                            <xades:EncapsulatedTimeStamp Id="ETS">
                                 <!-- response from the timestamping service -->
                             </xades:EncapsulatedTimeStamp>
                         </xades:SignatureTimeStamp>
