@@ -330,23 +330,22 @@ class XmlSignature:
 
         :param root_cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
         """
-        certs_node = self._get_node("xades:CertificateValues")
-        ca_node = etree.Element("{%s}EncapsulatedX509Certificate" % self.NAMESPACES["xades"])
-        ca_node.attrib["Id"] = "%s-ROOT-CA-CERT" % self.NEW_SIGNATURE_ID
-        if not isinstance(root_cert, Certificate):
-            root_cert = load_certificate(root_cert)
-        ca_node.text = base64.b64encode(root_cert.asn1.dump())
-        certs_node.append(ca_node)
+        self.add_cert(root_cert, {"Id": f"{self.NEW_SIGNATURE_ID}-ROOT-CA-CERT"})
         return self
 
-    def add_cert(self, cert: Union[Certificate, bytes]) -> "XmlSignature":
+    def add_cert(self, cert: Union[Certificate, bytes], attrib: Optional[dict]) -> "XmlSignature":
         """Add a cert. Latvian EDOC must have all of certs used in the xml (Root, OCSP and TimeStamp)
            This is mandatory for Latvian EDOC format
 
         :param cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
+        :param attrib: dict with attributes for <EncapsulatedX509Certificate> tag
         """
         certs_node = self._get_node("xades:CertificateValues")
         ca_node = etree.Element("{%s}EncapsulatedX509Certificate" % self.NAMESPACES["xades"])
+
+        for name, value in attrib.items():
+            ca_node.attrib[name] = value
+
         if not isinstance(cert, Certificate):
             cert = load_certificate(cert)
         ca_node.text = base64.b64encode(cert.asn1.dump())
