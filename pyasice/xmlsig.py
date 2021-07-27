@@ -3,8 +3,9 @@ import copy
 import hashlib
 import logging
 import os
+
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -333,7 +334,7 @@ class XmlSignature:
         self.add_cert(root_cert, {"Id": f"{self.NEW_SIGNATURE_ID}-ROOT-CA-CERT"})
         return self
 
-    def add_cert(self, cert: Union[Certificate, bytes], attrib: Optional[dict]) -> "XmlSignature":
+    def add_cert(self, cert: Union[Certificate, bytes], attrib: Dict = {}) -> "XmlSignature":
         """Add a cert. Latvian EDOC must have all of certs used in the xml (Root, OCSP and TimeStamp)
            This is mandatory for Latvian EDOC format
 

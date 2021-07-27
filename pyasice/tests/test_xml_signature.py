@@ -70,6 +70,16 @@ def test_xmlsig_add_cert(certificate_rsa_bytes):
     assert xml_signature._get_node("xades:EncapsulatedX509Certificate").attrib["Id"] == "TEST-ID"
 
 
+def test_xmlsig_add_cert_without_attrib(certificate_rsa_bytes):
+    xml_signature = XmlSignature.create()
+
+    cert = load_certificate(certificate_rsa_bytes)
+    xml_signature.add_cert(cert)
+    assert xml_signature._get_node("xades:EncapsulatedX509Certificate").text == base64.b64encode(
+        cert.asn1.dump()
+    ).decode("ascii")
+
+
 def test_xmlsig_set_root_cert(certificate_rsa_bytes):
     xml_signature = XmlSignature.create()
 
