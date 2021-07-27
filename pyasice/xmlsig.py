@@ -3,9 +3,8 @@ import copy
 import hashlib
 import logging
 import os
-
 from datetime import datetime
-from typing import Optional, Union, Dict
+from typing import Dict, Optional, Union
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
