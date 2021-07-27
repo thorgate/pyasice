@@ -61,19 +61,24 @@ def test_xmlsig_signing_time():
 
     assert xml_signature.get_signing_time() == "2000-01-01T00:00:00Z"
 
+
 def test_xmlsig_add_cert(certificate_rsa_bytes):
     xml_signature = XmlSignature.create()
 
     cert = load_certificate(certificate_rsa_bytes)
-    xml_signature.add_cert(cert, {'Id': 'TEST-ID'})
-    assert xml_signature._get_node('xades:EncapsulatedX509Certificate').attrib["Id"] == 'TEST-ID'
+    xml_signature.add_cert(cert, {"Id": "TEST-ID"})
+    assert xml_signature._get_node("xades:EncapsulatedX509Certificate").attrib["Id"] == "TEST-ID"
+
 
 def test_xmlsig_set_root_cert(certificate_rsa_bytes):
     xml_signature = XmlSignature.create()
 
     cert = load_certificate(certificate_rsa_bytes)
     xml_signature.set_root_ca_cert(cert)
-    assert xml_signature._get_node('xades:EncapsulatedX509Certificate').attrib["Id"] == f'{xml_signature.NEW_SIGNATURE_ID}-ROOT-CA-CERT'
+    assert (
+        xml_signature._get_node("xades:EncapsulatedX509Certificate").attrib["Id"]
+        == f"{xml_signature.NEW_SIGNATURE_ID}-ROOT-CA-CERT"
+    )
 
 
 def test_xmlsig_certificate(certificate_rsa_bytes):
