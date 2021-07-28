@@ -333,7 +333,7 @@ class XmlSignature:
         self.add_cert(root_cert, {"Id": f"{self.NEW_SIGNATURE_ID}-ROOT-CA-CERT"})
         return self
 
-    def add_cert(self, cert: Union[Certificate, bytes], attrib: Dict = {}) -> "XmlSignature":
+    def add_cert(self, cert: Union[Certificate, bytes], attribs: Optional[Dict] = None) -> "XmlSignature":
         """Add a cert. Latvian EDOC must have all of certs used in the xml (Root, OCSP and TimeStamp)
            This is mandatory for Latvian EDOC format
 
@@ -343,8 +343,9 @@ class XmlSignature:
         certs_node = self._get_node("xades:CertificateValues")
         ca_node = etree.Element("{%s}EncapsulatedX509Certificate" % self.NAMESPACES["xades"])
 
-        for name, value in attrib.items():
-            ca_node.attrib[name] = value
+        if attribs is not None:
+            for name, value in attribs.items():
+                ca_node.attrib[name] = value
 
         if not isinstance(cert, Certificate):
             cert = load_certificate(cert)
