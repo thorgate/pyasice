@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -330,12 +330,26 @@ class XmlSignature:
 
         :param root_cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
         """
+        self.add_cert(root_cert, {"Id": f"{self.NEW_SIGNATURE_ID}-ROOT-CA-CERT"})
+        return self
+
+    def add_cert(self, cert: Union[Certificate, bytes], attribs: Optional[Dict] = None) -> "XmlSignature":
+        """Add a cert. Latvian EDOC must have all of certs used in the xml (Root, OCSP and TimeStamp)
+           This is mandatory for Latvian EDOC format
+
+        :param cert: can be a PEM- or DER-encoded bytes content, or an `oscrypto.Certificate` object
+        :param attrib: dict with attributes for <EncapsulatedX509Certificate> tag
+        """
         certs_node = self._get_node("xades:CertificateValues")
         ca_node = etree.Element("{%s}EncapsulatedX509Certificate" % self.NAMESPACES["xades"])
-        ca_node.attrib["Id"] = "%s-ROOT-CA-CERT" % self.NEW_SIGNATURE_ID
-        if not isinstance(root_cert, Certificate):
-            root_cert = load_certificate(root_cert)
-        ca_node.text = base64.b64encode(root_cert.asn1.dump())
+
+        if attribs is not None:
+            for name, value in attribs.items():
+                ca_node.attrib[name] = value
+
+        if not isinstance(cert, Certificate):
+            cert = load_certificate(cert)
+        ca_node.text = base64.b64encode(cert.asn1.dump())
         certs_node.append(ca_node)
         return self
 
