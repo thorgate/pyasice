@@ -22,7 +22,6 @@ before_deploy:
   - pip install --upgrade pip
   - pip install poetry
   - poetry config http-basic.pypi __token__ $PYPI_PASSWORD
-  - poetry build -f wheel
 
 deploy:
   provider: script

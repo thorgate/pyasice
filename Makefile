@@ -27,7 +27,7 @@ coverage:
 
 .PHONY:
 build:
-	@poetry build -f wheel
+	@poetry build
 
 .PHONY:
 publish: build
