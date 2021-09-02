@@ -2,6 +2,9 @@ language: python
 
 os: linux
 
+cache:
+  pip: true
+
 jobs:
   include:
     - python: 3.6
@@ -11,18 +14,23 @@ jobs:
 
 
 script:
-  - make venv lint coverage
+  - pip install -U pip setuptools wheel poetry
+  - make setup lint coverage
+
+before_deploy:
+  - pip install --upgrade pip
+  - pip install poetry
+  - poetry config http-basic.pypi __token__ $PYPI_PASSWORD
+  - poetry build -f wheel
 
 deploy:
-  provider: pypi
-  # opt in to deployment v2 which allows using env vars for passwords
-  edge: true
-  username: __token__
-  distributions: sdist bdist_wheel
-  skip_existing: true
+  provider: script
+  script: poetry publish
+  skip_cleanup: true
   on:
     tags: true
     python: 3.6
+    repo: thorgate/pyasice
 
 notifications:
     email: false

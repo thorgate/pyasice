@@ -3,25 +3,28 @@ VENV := ./venv/bin
 export PATH := $(VENV):$(PATH)
 
 .PHONY:
-venv:
-	python -m venv venv
-	pip install -r requirements-dev.txt
+setup:
+	@poetry install
 
 .PHONY:
 lint:
-	black --check .
-	isort --check-only --project=$(PROJECT) .
-	flake8
+	poetry run black --check .
+	poetry run isort --check-only --project=$(PROJECT) .
+	poetry run flake8
 
 .PHONY:
 fmt:
-	black .
-	isort --project=$(PROJECT) .
+	poetry run black .
+	poetry run isort --project=$(PROJECT) .
 
 .PHONY:
 test:
-	pytest
+	poetry run pytest
 
 .PHONY:
 coverage:
-	pytest --cov=$(PROJECT) --cov-report html --cov-report term-missing
+	poetry run pytest --cov=$(PROJECT) --cov-report html --cov-report term-missing
+
+.PHONY:
+build:
+	@poetry build -f wheel
