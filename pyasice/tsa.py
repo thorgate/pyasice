@@ -13,6 +13,10 @@ class TSAError(PyAsiceError):
     pass
 
 
+def default_get_session():
+    return requests.Session()
+
+
 class TSA:
     """
     Query a Time Stamping Authority (TSA) for a signature time stamp
@@ -21,9 +25,11 @@ class TSA:
     REQUEST_CONTENT_TYPE = "application/timestamp-query"
     RESPONSE_CONTENT_TYPE = "application/timestamp-reply"
 
-    def __init__(self, url):
+    def __init__(self, url, get_session=None):
         self.url = url
         self.ts_response = None
+
+        self.session = get_session() if get_session else default_get_session()
 
     def get_timestamp(self, message: bytes) -> ContentInfo:
         """Get the time stamp structure for embedding in a XAdES signature
@@ -34,15 +40,18 @@ class TSA:
         """
         request = self.build_ts_request(message)
 
+        req = requests.Request(
+            method="post",
+            url=self.url,
+            data=request.dump(),
+            headers={
+                "Content-Type": self.REQUEST_CONTENT_TYPE,
+                "Connection": "close",
+            },
+        )
+
         try:
-            response = requests.post(
-                self.url,
-                data=request.dump(),
-                headers={
-                    "Content-Type": self.REQUEST_CONTENT_TYPE,
-                    "Connection": "close",
-                },
-            )
+            response = self.session.send(req.prepare())
             response.raise_for_status()
         except requests.ConnectionError as e:
             raise TSAError("Failed to connect to TSA service at {}".format(self.url)) from e

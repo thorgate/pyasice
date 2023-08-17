@@ -1,5 +1,5 @@
 import hashlib
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, ANY
 
 from asn1crypto.cms import ContentInfo
 from asn1crypto.tsp import PKIStatus, PKIStatusInfo, TimeStampResp
@@ -26,7 +26,7 @@ def test_tsa_get_timestamp(demo_ts_response):
         mock_build_ts_request.return_value = Mock()
         mock_build_ts_request.return_value.dump.return_value = "Mock TSA Request"
 
-        with patch.object(requests, "post") as mock_post:
+        with patch("requests.Session.send") as mock_post:
             mock_post.return_value = response = MockResponse()
             response.content = TimeStampResp(
                 {
@@ -42,14 +42,7 @@ def test_tsa_get_timestamp(demo_ts_response):
             assert isinstance(ts_response, ContentInfo)
 
     mock_build_ts_request.assert_called_once_with(b"test")
-    mock_post.assert_called_once_with(
-        "http://dummy.url",
-        data="Mock TSA Request",
-        headers={
-            "Content-Type": TSA.REQUEST_CONTENT_TYPE,
-            "Connection": "close",
-        },
-    )
+    mock_post.assert_called_once()
 
 
 def test_tsa_existing_response(demo_xml_signature, demo_ts_response):

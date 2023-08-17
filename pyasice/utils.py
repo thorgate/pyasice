@@ -4,7 +4,9 @@ from .tsa import TSA
 from .xmlsig import XmlSignature
 
 
-def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=True, *, ocsp_url, tsa_url=None):
+def finalize_signature(
+    xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=True, *, ocsp_url, tsa_url=None, get_session=None
+):
     """Finalize the XAdES signature in accordance with LT-TM profile, or LT-TS profile if `lt_ts` is True
 
     :param XmlSignature xml_signature:
@@ -12,6 +14,7 @@ def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=Tr
     :param bool lt_ts: Whether to make the signature compliant with LT-TS and perform a TSA request
     :param ocsp_url:
     :param tsa_url: required if lt_ts is True
+    :param get_session: optional function that returns a requests.Session instance
     """
     if lt_ts and not tsa_url:
         raise ValueError("TSA URL can not be empty when LT-TS profile is selected, requires a TSA service query")
@@ -24,14 +27,14 @@ def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=Tr
 
     if lt_ts:
         # Get a signature TimeStamp
-        tsa = TSA(tsa_url)
+        tsa = TSA(tsa_url, get_session=get_session)
         tsr = tsa.get_timestamp(xml_signature.get_timestamped_message())
         xml_signature.set_timestamp_response(tsr)
     else:
         xml_signature.remove_timestamp_node()
 
     # Get an OCSP status confirmation
-    ocsp = OCSP(ocsp_url)
+    ocsp = OCSP(ocsp_url, get_session=get_session)
     ocsp.validate(subject_cert, issuer_cert, signature_value)
 
     # Embed the OCSP response

@@ -18,4 +18,4 @@ from .xmlsig import XmlSignature
 # simply: except pyasice.Error
 Error = PyAsiceError
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"

@@ -11,6 +11,7 @@ from oscrypto import asymmetric
 
 from . import signature_verifier
 from .exceptions import PyAsiceError
+from .tsa import default_get_session
 
 
 class SKHackedTBSRequestExtension(TBSRequestExtension):
@@ -49,10 +50,12 @@ class OCSP(object):
     REQUEST_CONTENT_TYPE = "application/ocsp-request"
     RESPONSE_CONTENT_TYPE = "application/ocsp-response"
 
-    def __init__(self, url=None):
+    def __init__(self, url=None, get_session=None):
         """"""
         self.url = url
         self.ocsp_response: Optional[OCSPResponse] = None
+
+        self.session = get_session() if get_session else default_get_session()
 
     def validate(self, subject_cert, issuer_cert, signature):
         """
@@ -70,12 +73,15 @@ class OCSP(object):
         """
         ocsp_request = self.build_ocsp_request(subject_cert, issuer_cert, signature)
 
+        req = requests.Request(
+            method="post",
+            url=self.url,
+            data=ocsp_request.dump(),
+            headers={"Content-Type": self.REQUEST_CONTENT_TYPE, "Connection": "close"},
+        )
+
         try:
-            response = requests.post(
-                self.url,
-                data=ocsp_request.dump(),
-                headers={"Content-Type": self.REQUEST_CONTENT_TYPE, "Connection": "close"},
-            )
+            response = self.session.send(req.prepare())
             response.raise_for_status()
         except requests.ConnectionError:
             raise OCSPError(f"Failed to connect to OCSP service at {self.url}")

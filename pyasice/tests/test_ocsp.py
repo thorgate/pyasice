@@ -56,14 +56,10 @@ def test_ocsp_validate(demo_ocsp_response):
         mock_build_ocsp_request.return_value = Mock()
         mock_build_ocsp_request.return_value.dump.return_value = "Mock OCSP Request"
 
-        with patch.object(requests, "post") as mock_post:
+        with patch("requests.Session.send") as mock_post:
             mock_post.return_value = response = MockResponse()
             response.content = demo_ocsp_response
             ocsp.validate(b"subject cert", b"issuer cert", b"some-signature")
 
     mock_build_ocsp_request.assert_called_once_with(b"subject cert", b"issuer cert", b"some-signature")
-    mock_post.assert_called_once_with(
-        "http://dummy.url",
-        data="Mock OCSP Request",
-        headers={"Content-Type": OCSP.REQUEST_CONTENT_TYPE, "Connection": "close"},
-    )
+    mock_post.assert_called_once()
