@@ -25,7 +25,7 @@ class TSA:
     REQUEST_CONTENT_TYPE = "application/timestamp-query"
     RESPONSE_CONTENT_TYPE = "application/timestamp-reply"
 
-    def __init__(self, url, get_session=None):
+    def __init__(self, url=None, get_session=None):
         self.url = url
         self.ts_response = None
 
@@ -162,3 +162,12 @@ class TSA:
                 "cert_req": True,  # Need the TSA cert in the response for validation
             }
         )
+
+    def dump(self) -> bytes:
+        return self.ts_response.dump()
+
+    @classmethod
+    def load(cls, binary_data):
+        me = cls()
+        me.ts_response = ContentInfo.load(binary_data)
+        return me
