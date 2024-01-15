@@ -42,7 +42,7 @@ class Container(object):
 
     META_DIR = "META-INF"
     # > The names of these files shall contain the string "signatures" [1], ch.8
-    SIGNATURE_FILES_REGEX = r"^%s/signatures(\d+)\.xml$" % META_DIR
+    SIGNATURE_FILES_REGEX = r"^%s/signatures[^\d]*(\d+)\.xml$" % META_DIR
     SIGNATURE_FILES_TEMPLATE = "%s/signatures{}.xml" % META_DIR
 
     # Manifest structure constants
@@ -270,6 +270,15 @@ class Container(object):
 
         if sorted(toc_data_files) != sorted(manifest_data_files):
             raise self.Error("Manifest file is out of date")
+
+    def _write_signature(self, signature_xml, fn):
+        if fn in self._read_toc():
+            self._delete_files(fn)
+
+        with self.zip_writer as zip_file:
+            zip_file.writestr(
+                fn, signature_xml
+            )
 
     def _write_manifest(self):
         """Create/update the manifest"""
