@@ -544,7 +544,7 @@ class XmlSignature:
         if update:
             si_digest_node.text = new_digest_value
 
-        return si_digest_node.text, new_digest_value
+        return si_digest_node.text.strip(), new_digest_value
 
     def _get_unsigned_properties_node(self):
         res = self.xml.find(
