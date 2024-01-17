@@ -42,7 +42,7 @@ class Container(object):
 
     META_DIR = "META-INF"
     # > The names of these files shall contain the string "signatures" [1], ch.8
-    SIGNATURE_FILES_REGEX = r"^%s/signatures[^\d]*(\d+)\.xml$" % META_DIR
+    SIGNATURE_FILES_REGEX = r"^%s/signatures[^\d]*(\d*)\.xml$" % META_DIR
     SIGNATURE_FILES_TEMPLATE = "%s/signatures{}.xml" % META_DIR
 
     # Manifest structure constants
@@ -206,7 +206,7 @@ class Container(object):
 
         if embedded_signatures:
             last_n = re.match(self.SIGNATURE_FILES_REGEX, embedded_signatures[-1]).group(1)
-            next_n = int(last_n) + 1  # even with alphabetic file sorting, this gives valid next number
+            next_n = int(last_n) + 1 if last_n.isnumeric() else 1 # even with alphabetic file sorting, this gives valid next number
         else:
             next_n = 1
 
