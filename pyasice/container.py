@@ -216,11 +216,21 @@ class Container(object):
             zip_file.writestr(new_sig_file, signature.dump(), ZIP_DEFLATED)
         return self
 
+    def update_signature(self, signature: XmlSignature, file_name: str):
+        """Update an embedded signature"""
+        self._write_signature(signature.dump(), file_name)
+
     def iter_signatures(self):
         """Iterate over embedded signatures"""
         for entry in self._enumerate_signatures():
             with self.open_file(entry) as f:
                 yield XmlSignature(f.read())
+
+    def iter_signatures_with_filenames(self):
+        """Iterate over signatures and their file names"""
+        for entry in self._enumerate_signatures():
+            with self.open_file(entry) as f:
+                yield XmlSignature(f.read()), entry
 
     def verify_signatures(self):
         """Verify all signatures in the container
@@ -271,13 +281,14 @@ class Container(object):
         if sorted(toc_data_files) != sorted(manifest_data_files):
             raise self.Error("Manifest file is out of date")
 
-    def _write_signature(self, signature_xml, fn):
-        if fn in self._read_toc():
-            self._delete_files(fn)
+    def _write_signature(self, signature_xml, file_name):
+        """Create/overwrite signature XML"""
+        if file_name in self._read_toc():
+            self._delete_files(file_name)
 
         with self.zip_writer as zip_file:
             zip_file.writestr(
-                fn, signature_xml
+                file_name, signature_xml
             )
 
     def _write_manifest(self):
