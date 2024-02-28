@@ -75,9 +75,7 @@ def test_xmlsig_add_cert_without_attrib(certificate_rsa_bytes):
 
     cert = load_certificate(certificate_rsa_bytes)
     xml_signature.add_cert(cert)
-    assert xml_signature._get_node("xades:EncapsulatedX509Certificate").text == base64.b64encode(
-        cert.asn1.dump()
-    ).decode("ascii")
+    assert xml_signature._get_node("xades:EncapsulatedX509Certificate").text == base64.b64encode(cert.asn1.dump()).decode("ascii")
 
 
 def test_xmlsig_set_root_cert(certificate_rsa_bytes):
@@ -85,10 +83,7 @@ def test_xmlsig_set_root_cert(certificate_rsa_bytes):
 
     cert = load_certificate(certificate_rsa_bytes)
     xml_signature.set_root_ca_cert(cert)
-    assert (
-        xml_signature._get_node("xades:EncapsulatedX509Certificate").attrib["Id"]
-        == f"{xml_signature.NEW_SIGNATURE_ID}-ROOT-CA-CERT"
-    )
+    assert xml_signature._get_node("xades:EncapsulatedX509Certificate").attrib["Id"] == f"{xml_signature.NEW_SIGNATURE_ID}-ROOT-CA-CERT"
 
 
 def test_xmlsig_certificate(certificate_rsa_bytes):
@@ -115,10 +110,7 @@ def test_xmlsig_documents():
     assert xml_signature.doc_ids == ["r-id-1"]
     assert xml_signature._get_node('ds:Reference[@Id="r-id-1"]').attrib["URI"] == "test.txt"
     assert xml_signature._get_node('ds:Reference[@Id="r-id-1"]/ds:DigestValue').text == digest
-    assert (
-        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-1"]/xades:MimeType').text
-        == "text/plain"
-    )
+    assert xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-1"]/xades:MimeType').text == "text/plain"
 
     xml_signature.add_document("test2.pdf", b"test PDF", "application/pdf")
     digest = base64.b64encode(hashlib.sha256(b"test PDF").digest()).decode("ascii")
@@ -126,10 +118,7 @@ def test_xmlsig_documents():
     assert xml_signature.doc_ids == ["r-id-1", "r-id-2"]
     assert xml_signature._get_node('ds:Reference[@Id="r-id-2"]').attrib["URI"] == "test2.pdf"
     assert xml_signature._get_node('ds:Reference[@Id="r-id-2"]/ds:DigestValue').text == digest
-    assert (
-        xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-2"]/xades:MimeType').text
-        == "application/pdf"
-    )
+    assert xml_signature._get_node('xades:DataObjectFormat[@ObjectReference="#r-id-2"]/xades:MimeType').text == "application/pdf"
 
 
 @pytest.mark.parametrize("signature_algo", [None, "rsa-sha512", "ecdsa-sha256", "ecdsa-sha512"])

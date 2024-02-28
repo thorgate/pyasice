@@ -4,9 +4,7 @@ from .tsa import TSA
 from .xmlsig import XmlSignature
 
 
-def finalize_signature(
-    xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=True, *, ocsp_url, tsa_url=None, get_session=None
-):
+def finalize_signature(xml_signature: XmlSignature, issuer_cert: bytes, lt_ts=True, *, ocsp_url, tsa_url=None, get_session=None):
     """Finalize the XAdES signature in accordance with LT-TM profile, or LT-TS profile if `lt_ts` is True
 
     :param XmlSignature xml_signature:

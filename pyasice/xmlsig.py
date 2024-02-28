@@ -441,7 +441,10 @@ class XmlSignature:
         if self._get_node("xades:EncapsulatedTimeStamp") is None:
             usprp = self._get_unsigned_properties_node()
             sigts = etree.Element("{http://uri.etsi.org/01903/v1.3.2#}SignatureTimeStamp", Id="TS")
-            cmeth = etree.Element("{http://www.w3.org/2000/09/xmldsig#}CanonicalizationMethod", Algorithm="http://www.w3.org/2006/12/xml-c14n11")
+            cmeth = etree.Element(
+                "{http://www.w3.org/2000/09/xmldsig#}CanonicalizationMethod",
+                Algorithm="http://www.w3.org/2006/12/xml-c14n11",
+            )
             encts = etree.Element("{http://uri.etsi.org/01903/v1.3.2#}EncapsulatedTimeStamp", Id="ETS")
             sigts.append(cmeth)
             sigts.append(encts)
@@ -484,9 +487,7 @@ class XmlSignature:
         return self.xml.find(".//{}".format(tag_name), namespaces=self.NAMESPACES)
 
     def _get_signed_properties_node(self):
-        return self.xml.find(
-            "./ds:Signature/ds:Object/xades:QualifyingProperties/xades:SignedProperties", self.NAMESPACES
-        )
+        return self.xml.find("./ds:Signature/ds:Object/xades:QualifyingProperties/xades:SignedProperties", self.NAMESPACES)
 
     def _get_signing_time_node(self):
         return self.xml.find(
@@ -548,12 +549,11 @@ class XmlSignature:
 
     def _get_unsigned_properties_node(self):
         res = self.xml.find(
-            "./ds:Signature/ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties", self.NAMESPACES
+            "./ds:Signature/ds:Object/xades:QualifyingProperties/xades:UnsignedProperties/xades:UnsignedSignatureProperties",
+            self.NAMESPACES,
         )
         if res is None:
-            qprop = self.xml.find(
-                "./ds:Signature/ds:Object/xades:QualifyingProperties", self.NAMESPACES
-            )
+            qprop = self.xml.find("./ds:Signature/ds:Object/xades:QualifyingProperties", self.NAMESPACES)
             usp = etree.Element("{http://uri.etsi.org/01903/v1.3.2#}UnsignedProperties")
             res = etree.Element("{http://uri.etsi.org/01903/v1.3.2#}UnsignedSignatureProperties")
             usp.append(res)

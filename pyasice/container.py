@@ -206,7 +206,7 @@ class Container(object):
 
         if embedded_signatures:
             last_n = re.match(self.SIGNATURE_FILES_REGEX, embedded_signatures[-1]).group(1)
-            next_n = int(last_n) + 1 if last_n.isnumeric() else 1 # even with alphabetic file sorting, this gives valid next number
+            next_n = int(last_n) + 1 if last_n.isnumeric() else 1  # even with alphabetic file sorting, this gives valid next number
         else:
             next_n = 1
 
@@ -271,9 +271,7 @@ class Container(object):
             raise self.Error(f"Failed to read manifest for container '{self}'") from e
 
         toc_data_files = [
-            file_name
-            for file_name in toc[1:]  # the first one is MIME_TYPE_FILE, can be skipped
-            if not file_name.startswith(self.META_DIR)
+            file_name for file_name in toc[1:] if not file_name.startswith(self.META_DIR)  # the first one is MIME_TYPE_FILE, can be skipped
         ]
 
         manifest_data_files = [name for name, _ in self._enumerate_data_files()]
@@ -287,9 +285,7 @@ class Container(object):
             self._delete_files(file_name)
 
         with self.zip_writer as zip_file:
-            zip_file.writestr(
-                file_name, signature_xml
-            )
+            zip_file.writestr(file_name, signature_xml)
 
     def _write_manifest(self):
         """Create/update the manifest"""
@@ -302,9 +298,7 @@ class Container(object):
             self._delete_files(self.MANIFEST_PATH)
 
         with self.zip_writer as zip_file:
-            zip_file.writestr(
-                self.MANIFEST_PATH, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml)
-            )
+            zip_file.writestr(self.MANIFEST_PATH, b'<?xml version="1.0" encoding="UTF-8"?>' + etree.tostring(manifest_xml))
 
     @classmethod
     def _create_container(cls):

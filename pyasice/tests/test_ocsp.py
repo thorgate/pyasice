@@ -7,7 +7,7 @@ from asn1crypto.x509 import Certificate as ASN1Certificate
 from cryptography.hazmat.primitives.serialization import Encoding
 from oscrypto.asymmetric import load_certificate
 
-from pyasice.ocsp import OCSP, requests
+from pyasice.ocsp import OCSP
 
 from .conftest import cert_builder
 

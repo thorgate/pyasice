@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyasice"
-version = "1.0.5"
+version = "1.1.0"
 description = "Manipulate ASiC-E containers and XAdES/eIDAS signatures for Estonian e-identity services"
 readme = "README.md"
 license = "ISC"
@@ -73,7 +73,7 @@ isort = "5.6.*"
 
 
 [tool.black]
-line-length = 120
+line-length = 140
 target-version = ['py38']
 include = '\.pyi?$'
 exclude = '''
@@ -95,7 +95,7 @@ exclude = '''
 
 [tool.isort]
 skip_glob = "venv*,.venv*,migrations"
-line_length = '120'
+line_length = '140'
 atomic = 'true'
 multi_line_output = '3'
 include_trailing_comma = 'true'

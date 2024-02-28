@@ -1,10 +1,10 @@
 import hashlib
-from unittest.mock import Mock, patch, ANY
+from unittest.mock import Mock, patch
 
 from asn1crypto.cms import ContentInfo
 from asn1crypto.tsp import PKIStatus, PKIStatusInfo, TimeStampResp
 
-from pyasice.tsa import requests, TSA
+from pyasice.tsa import TSA
 
 
 class MockResponse(Mock):
