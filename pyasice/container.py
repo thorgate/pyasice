@@ -42,7 +42,7 @@ class Container(object):
 
     META_DIR = "META-INF"
     # > The names of these files shall contain the string "signatures" [1], ch.8
-    SIGNATURE_FILES_REGEX = r"^%s/signatures(\d+)\.xml$" % META_DIR
+    SIGNATURE_FILES_REGEX = r"^%s/signatures[^\d]*(\d*)\.xml$" % META_DIR
     SIGNATURE_FILES_TEMPLATE = "%s/signatures{}.xml" % META_DIR
 
     # Manifest structure constants
@@ -206,7 +206,7 @@ class Container(object):
 
         if embedded_signatures:
             last_n = re.match(self.SIGNATURE_FILES_REGEX, embedded_signatures[-1]).group(1)
-            next_n = int(last_n) + 1  # even with alphabetic file sorting, this gives valid next number
+            next_n = int(last_n) + 1 if last_n.isnumeric() else 1 # even with alphabetic file sorting, this gives valid next number
         else:
             next_n = 1
 
@@ -216,11 +216,21 @@ class Container(object):
             zip_file.writestr(new_sig_file, signature.dump(), ZIP_DEFLATED)
         return self
 
+    def update_signature(self, signature: XmlSignature, file_name: str):
+        """Update an embedded signature"""
+        self._write_signature(signature.dump(), file_name)
+
     def iter_signatures(self):
         """Iterate over embedded signatures"""
         for entry in self._enumerate_signatures():
             with self.open_file(entry) as f:
                 yield XmlSignature(f.read())
+
+    def iter_signatures_with_filenames(self):
+        """Iterate over signatures and their file names"""
+        for entry in self._enumerate_signatures():
+            with self.open_file(entry) as f:
+                yield XmlSignature(f.read()), entry
 
     def verify_signatures(self):
         """Verify all signatures in the container
@@ -270,6 +280,16 @@ class Container(object):
 
         if sorted(toc_data_files) != sorted(manifest_data_files):
             raise self.Error("Manifest file is out of date")
+
+    def _write_signature(self, signature_xml, file_name):
+        """Create/overwrite signature XML"""
+        if file_name in self._read_toc():
+            self._delete_files(file_name)
+
+        with self.zip_writer as zip_file:
+            zip_file.writestr(
+                file_name, signature_xml
+            )
 
     def _write_manifest(self):
         """Create/update the manifest"""
