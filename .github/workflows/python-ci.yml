@@ -58,6 +58,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel poetry
+          python -m pip install coveralls
           make setup
 
       - name: Run coverage and upload to Coveralls
