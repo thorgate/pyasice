@@ -8,14 +8,13 @@ setup:
 
 .PHONY:
 lint:
-	poetry run black --check .
-	poetry run isort --check-only --project=$(PROJECT) .
-	poetry run flake8
+	poetry run ruff format . --diff
+	poetry run ruff --select I . --diff
 
 .PHONY:
 fmt:
-	poetry run black .
-	poetry run isort --project=$(PROJECT) .
+	poetry run ruff format .
+	poetry run ruff --select I . --fix
 
 .PHONY:
 test:

@@ -285,7 +285,9 @@ class Container(object):
             raise self.Error(f"Failed to read manifest for container '{self}'") from e
 
         toc_data_files = [
-            file_name for file_name in toc[1:] if not file_name.startswith(self.META_DIR)  # the first one is MIME_TYPE_FILE, can be skipped
+            file_name
+            for file_name in toc[1:]
+            if not file_name.startswith(self.META_DIR)  # the first one is MIME_TYPE_FILE, can be skipped
         ]
 
         manifest_data_files = [name for name, _ in self._enumerate_data_files()]

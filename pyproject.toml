@@ -27,7 +27,6 @@ classifiers=[
     "License :: OSI Approved :: ISC License (ISCL)",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -54,7 +53,7 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
-python = ">=3.6,<4.0"
+python = ">=3.7,<4.0"
 
 lxml = ">=4,<5"
 oscrypto = "*"
@@ -63,50 +62,110 @@ cryptography = ">=5"
 requests = ">=2.20"
 
 [tool.poetry.dev-dependencies]
-pytest = "6.*"
+pytest = "7.*"
 coverage = "5.*"
 coveralls = "2.*"
 pytest-cov = ">=2.8.1"
-flake8 = "3.8.*"
-black = "20.8b1"
-isort = "5.6.*"
+pylint = "*"
+ruff = "^0.1.5"
 
 
-[tool.black]
+[tool.ruff]
+target-version = "py38"
 line-length = 140
-target-version = ['py38']
-include = '\.pyi?$'
-exclude = '''
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.mypy_cache
-    | \.tox
-    | \.?venv.*
-    | _build
-    | build
-    | dist
-    | docs
-  )/
-)
-'''
+show-fixes = true
+cache-dir = "~/.cache/ruff"
 
-[tool.isort]
-skip_glob = "venv*,.venv*,migrations"
-line_length = '140'
-atomic = 'true'
-multi_line_output = '3'
-include_trailing_comma = 'true'
-use_parentheses = 'true'
-force_grid_wrap = '0'
-known_pytest = "pytest"
-known_first_party = "pyasice"
-lines_between_types = '0'
-sections = "FUTURE,STDLIB,PYTEST,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
-lines_after_imports = '2'
-force_alphabetical_sort_within_sections = '1'
+exclude = [
+	".git",
+    ".mypy_cache",
+    "_build",
+    "build",
+    "dist",
+    "docs",
+    "cover",
+]
+
+select = ["ALL"] # See https://docs.astral.sh/ruff/rules/ for a complete list of available rules
+ignore = [
+    "D211", # no-blank-line-before-class
+    "D213", # multi-line-summary-second-line
+
+    "COM812", # Trailing comma missing
+    "ISC001", # Single line implicit string concatenation
+
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = [
+    "RUF100", # Don't remove unused noqa comments automatically
+]
+
+
+# The following rules are native re-implementations in ruff.
+# The listed tools are not actually run, and configuration only affects ruff.
+# Some of the tools are already part of our pipeline, but will hopefully be replaced by ruff in the future.
+[tool.ruff.mccabe]
+max-complexity = 22
+
+[tool.ruff.isort]
+# This configuration is equivalent to our current isort configuration and `ruff --select I ." should be equivalent to `isort .`
+section-order = ["future", "standard-library", "django", "pytest", "third-party", "first-party", "local-folder"]
+lines-after-imports = 2
+order-by-type = false
+known-first-party = ["pyasice"]
+
+[tool.ruff.isort.sections]
+django = ["django"]
+pytest = ["pytest"]
+
+# Pylint parity can be seen in https://github.com/astral-sh/ruff/issues/970
+[tool.ruff.pylint]
+max-branches = 20
+max-args = 6
+max-returns = 8
+
+[tool.ruff.flake8-builtins]
+builtins-ignorelist = [
+    "filter",
+    "help",
+    "id",
+    "list",
+    "object",
+    "type",
+]
+
+[tool.ruff.flake8-import-conventions]
+banned-from = ["typing"]
+
+[tool.ruff.flake8-import-conventions.aliases]
+"typing" = "t"
+
+[tool.ruff.flake8-import-conventions.banned-aliases]
+#"django.utils.translation.gettext" = ["_"]
+#"django.utils.translation.gettext_lazy" = ["_"]
+#"django.utils.translation.pgettext" = ["_"]
+#"django.utils.translation.pgettext_lazy" = ["_"]
+#"django.utils.translation.ngettext" = ["_"]
+#"django.utils.translation.ngettext_lazy" = ["_"]
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "csv"
 
 [tool.coverage.run]
 branch = true
