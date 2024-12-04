@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyasice"
-version = "1.1.0"
+version = "1.2.0"
 description = "Manipulate ASiC-E containers and XAdES/eIDAS signatures for Estonian e-identity services"
 readme = "README.md"
 license = "ISC"

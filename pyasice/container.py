@@ -5,11 +5,22 @@ from typing import BinaryIO, Optional, Union
 from zipfile import BadZipFile, ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from lxml import etree
-from oscrypto.asymmetric import Certificate
+from oscrypto.asymmetric import Certificate, load_certificate
 
 from .exceptions import ContainerError, NoFilesToSign
 from .xmlsig import XmlSignature
 
+
+def resolve_algorithm(cert: Union[bytes, Certificate], algorithm="sha256") -> str:
+    # If the certificate is an ECC cert, use ECDSA
+    if isinstance(cert, bytes):
+        cert = load_certificate(cert)
+
+    if isinstance(cert, Certificate):
+        if cert.public_key.algorithm == "ec":
+            return f"ecdsa-{algorithm}"
+
+    return f"rsa-{algorithm}"
 
 class Container(object):
     """
@@ -98,7 +109,7 @@ class Container(object):
         with open(path, "rb") as f:
             return cls(f)
 
-    def prepare_signature(self, signer_certificate: Union[bytes, Certificate]):
+    def prepare_signature(self, signer_certificate: Union[bytes, Certificate], sign_algorithm: str = "sha256"):
         """Generates an XML signature structure for files in the container"""
         if not self.has_data_files():
             raise NoFilesToSign(f"Container `{self}` contains no files to sign")
@@ -108,6 +119,8 @@ class Container(object):
 
         for file_name, content, mime_type in self.iter_data_files():
             xml_sig.add_document(file_name, content, mime_type)
+
+        xml_sig.set_signature_algorithm(resolve_algorithm(signer_certificate, sign_algorithm))
 
         xml_sig.set_certificate(signer_certificate).update_signed_info()
 
