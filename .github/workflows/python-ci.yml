@@ -44,8 +44,13 @@ jobs:
         make coverage
 
   coverage:
-    if: matrix.python-version == '3.12'
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.12]
+
+    if: matrix.python-version == '3.12'
 
     steps:
       - name: Checkout repository
