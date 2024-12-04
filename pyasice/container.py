@@ -22,6 +22,7 @@ def resolve_algorithm(cert: Union[bytes, Certificate], algorithm="sha256") -> st
 
     return f"rsa-{algorithm}"
 
+
 class Container(object):
     """
     Manipulate ASiC-E/BDoc v2 containers.
