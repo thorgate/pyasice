@@ -13,6 +13,11 @@ from . import signature_verifier
 from .exceptions import PyAsiceError
 from .tsa import default_get_session
 
+# OCSP certificate status values (RFC 6960)
+CERT_STATUS_GOOD = "good"
+CERT_STATUS_REVOKED = "revoked"
+CERT_STATUS_UNKNOWN = "unknown"
+
 
 class SKHackedTBSRequestExtension(TBSRequestExtension):
     """A workaround class for compatibility with old java libraries used in SK.ee
@@ -30,6 +35,18 @@ class SKHackedTBSRequestExtension(TBSRequestExtension):
 
 
 class OCSPError(PyAsiceError):
+    pass
+
+
+class OCSPCertificateRevokedError(OCSPError):
+    """The certificate has been revoked."""
+
+    pass
+
+
+class OCSPCertificateUnknownError(OCSPError):
+    """The certificate status is unknown to the OCSP responder."""
+
     pass
 
 
@@ -126,6 +143,22 @@ class OCSP(object):
             raise OCSPError("OCSP validation failed: certificate is %s" % ocsp_status)
 
         basic_response: ocsp.BasicOCSPResponse = ocsp_response.basic_ocsp_response
+
+        # Check cert_status (the actual certificate validity)
+        single_response = ocsp_response.response_data["responses"][0]
+        cert_status = single_response["cert_status"]
+        status_name = cert_status.name
+
+        if status_name == CERT_STATUS_GOOD:
+            pass  # Certificate is valid, continue to signature verification
+        elif status_name == CERT_STATUS_REVOKED:
+            revoked_info = cert_status.chosen
+            revocation_time = revoked_info["revocation_time"].native
+            raise OCSPCertificateRevokedError(f"Certificate was revoked at {revocation_time}")
+        elif status_name == CERT_STATUS_UNKNOWN:
+            raise OCSPCertificateUnknownError("Certificate status is unknown to the OCSP responder")
+        else:
+            raise OCSPError(f"Unexpected certificate status: {status_name}")
 
         # Signer's certificate
         certs = basic_response["certs"]
