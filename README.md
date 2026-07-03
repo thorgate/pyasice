@@ -16,6 +16,7 @@ which are based on the XAdES/eIDAS stack.
 * [Quickstart](#quickstart)
 * * [ASiC-E/BDOC Container File Manipulation](#asic-ebdoc-container-file-manipulation)
 * * [Signing Flow Utilities](#signing-flow-utilities)
+* [Local development](#local-development)
 * [Normative References](#normative-references)
 * [Module Layout](#module-layout)
 * [Technology Stack](#technology-stack)
@@ -27,6 +28,41 @@ which are based on the XAdES/eIDAS stack.
 * [Secondary Services](#secondary-services)
 * * [OCSP](#ocsp)
 * * [Timestamping Service](#timestamping-service)
+
+## Local development
+
+Install dependencies and run the test suite with [Poetry](https://python-poetry.org/):
+
+```bash
+poetry install
+make test
+```
+
+`pyasice` supports Python 3.7+ and (since widening the `lxml` constraint to
+`>=4,<6`) works on modern interpreters including Python 3.13.
+
+### Known issue: `oscrypto` cannot detect libcrypto on OpenSSL 3.x
+
+On systems shipping OpenSSL 3.x (e.g. recent Debian/Ubuntu), the released
+`oscrypto==1.3.0` raises the following at import time:
+
+```
+oscrypto.errors.LibraryNotFoundError: Error detecting the version of libcrypto
+```
+
+This is **not** a missing system library — libcrypto is present and found. It
+is an `oscrypto` bug: its version-detection regex only accepts single-digit
+version components, so it fails to parse strings like `OpenSSL 3.0.13`. See
+[oscrypto#78](https://github.com/wbond/oscrypto/issues/78).
+
+Work around it locally by force-reinstalling the patched `oscrypto` from git.
+The patched build self-reports the same `1.3.0` version, so `--force-reinstall`
+is required or pip will skip it as already satisfied:
+
+```bash
+poetry run pip install --force-reinstall --no-deps \
+  "oscrypto @ git+https://github.com/wbond/oscrypto.git@d5f3437"
+```
 
 ## Quickstart
 

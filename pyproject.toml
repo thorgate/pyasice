@@ -43,11 +43,6 @@ exclude = [
 ]
 
 
-[[tool.poetry.source]]
-name = "the_pypi"
-url = "https://pypi.org/simple"
-default = true
-
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
@@ -55,7 +50,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.dependencies]
 python = ">=3.7,<4.0"
 
-lxml = ">=4,<5"
+lxml = ">=4,<6"
 oscrypto = "*"
 asn1crypto = "*"
 cryptography = ">=5"
